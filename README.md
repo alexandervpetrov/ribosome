@@ -1,2 +1,3 @@
-# ribosome-tool
-Yet another project deploy and release tool
+# Ribosome
+
+Yet another project deploy and release tool.
