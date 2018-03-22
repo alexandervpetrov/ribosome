@@ -1,0 +1,18 @@
+[[source]]
+name = "pypi"
+verify_ssl = true
+url = "https://pypi.python.org/simple"
+
+[requires]
+python_version = "3.6"
+
+[packages]
+click = "*"
+setuptools-scm = "*"
+"ruamel.yaml" = "*"
+"boto3" = "*"
+coloredlogs = "*"
+"fabric3" = "*"
+
+[dev-packages]
+pycodestyle = "*"
