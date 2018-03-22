@@ -1,23 +1,26 @@
+#!/usr/bin/env python
 
 import setuptools
-import codecs
 import os.path
-
-import ribosome
+import io
+import re
 
 
 here = os.path.abspath(os.path.dirname(__file__))
 
-with codecs.open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
-    long_description = f.read()
+with io.open(os.path.join(here, 'README.md'), 'rt', encoding='utf8') as f:
+    readme = f.read()
+
+with io.open(os.path.join(here, 'ribosome', '__init__.py'), 'rt', encoding='utf8') as f:
+    version = re.search(r'__version__ = \'(.*?)\'', f.read()).group(1)
 
 
 setuptools.setup(
     name='ribosome.tool',
-    version=ribosome.__version__,
+    version=version,
     description='Yet another project deploy and release tool',
-    long_description=long_description,
-    long_description_content_type='text/markdown',
+    long_description=readme,
+    # long_description_content_type='text/markdown',
     url='https://github.com/alexandervpetrov/ribosome',
     author='Oleksandr Petrov',
     author_email='alexandervpetrov@gmail.com',
