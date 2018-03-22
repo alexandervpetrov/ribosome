@@ -22,7 +22,7 @@ import fabric.api as fapi
 
 # TODO: move from [fabric] to [paramiko]
 
-__version__ = '0.1.0'
+__version__ = '0.1.0a1'
 
 log = logging.getLogger('ribosome')
 
