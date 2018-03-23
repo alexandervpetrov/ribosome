@@ -7,8 +7,8 @@ help:
 	@grep -E '^[a-zA-Z_-.]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 
-clean: ## Remove bytecode, cache and build files
-	@echo "Removing bytecode, cache and build files..."
+clean: ## Remove bytecode, cache, build and run files
+	@echo "Removing bytecode, cache, build and run files..."
 	@rm -rf `find . -name __pycache__`
 	@rm -f `find . -type f -name '*.py[co]' `
 	@rm -rf .cache
@@ -21,4 +21,5 @@ clean: ## Remove bytecode, cache and build files
 
 codestyle: ## Check code style
 	@echo "Checking code style..."
-	@pipenv run pycodestyle *.py --ignore=E501
+	@pycodestyle ribosome --ignore=E501
+	@pycodestyle *.py --ignore=E501
