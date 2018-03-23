@@ -199,7 +199,7 @@ def check_scm_status_for_release(scm_info):
     if scm_info.dirty:
         return None, 'Working directory has uncommitted changes, cannot release'
     if scm_info.distance is not None:
-        return None, 'Found {} commits after tag. Only clean SCM tag allowed for release'.format(scm_info.distance)
+        return None, 'Found {} commit(s) after tag. Only clean SCM tag allowed for release'.format(scm_info.distance)
     return None, None
 
 
@@ -365,7 +365,7 @@ def make_remote_operation(fabric_func, *fixed_args, logstreams=False, **fixed_kw
     return remote_operation
 
 
-remote_run = make_remote_operation(fapi.run, logstreams=True, shell=False)
+remote_run = make_remote_operation(fapi.run, logstreams=True, shell=True)
 remote_put = make_remote_operation(fapi.put)
 
 
@@ -451,7 +451,7 @@ def upload_release(host, release_name, s3bucket, force=False):
 def setup_runtime_environment(host, release_name, commands):
     log.debug('Starting runtime environment setup...')
     project_tag, version = split_release_name(release_name)
-    remote_project_root = os.path.join(PROJECTS_REMOTE_ROOT, project_tag)
+    remote_project_root = os.path.join(PROJECTS_REMOTE_ROOT, project_tag, release_name)
     with fapi.cd(remote_project_root):
         for command in commands:
             result = remote_run(command)
@@ -539,7 +539,7 @@ CLICK_CONTEXT_SETTINGS = dict(
 
 
 @click.group(context_settings=CLICK_CONTEXT_SETTINGS)
-@click.option('-v', '--verbose', is_flag=True, help='More job and error logging')
+@click.option('-v', '--verbose', is_flag=True, help='More detailed logging to console')
 @click.option('-f', '--force', is_flag=True, help='Rewrite existing files')
 @click.version_option(prog_name='Ribosome', version=__version__)
 @click.pass_context
@@ -647,11 +647,15 @@ def deploy(settings, version, config, host):
     s3bucket = codons.release.publish.s3bucket
 
     execute_as_remote_task(upload_release, host, release_name, s3bucket, force=settings.force)
+    log.info('Release uploaded to remote host')
 
-    setup_commands = codons.setup_runtime_environment.get('commands', [])
+    # pip install --user pipenv
+    # .profile
 
-    # TODO: bootstrap / configure / setup runtime environment
-    execute_as_remote_task(setup_runtime_environment, host, release_name, setup_commands)
+    if codons.setup_runtime_environment:
+        setup_commands = codons.setup_runtime_environment.get('commands', [])
+        execute_as_remote_task(setup_runtime_environment, host, release_name, setup_commands)
+        log.info('Runtime environment at remote host configured')
 
     log.info('Release [%s] deployed to host [%s] and configured for runnning as [%s]', release_name, host, config)
     return None, None
