@@ -1,25 +1,31 @@
 #!/usr/bin/env python
 
-import setuptools
 import os.path
 import io
 import re
+import setuptools
 
 
-here = os.path.abspath(os.path.dirname(__file__))
+HERE = os.path.abspath(os.path.dirname(__file__))
 
-with io.open(os.path.join(here, 'README.md'), 'rt', encoding='utf8') as f:
-    readme = f.read()
 
-with io.open(os.path.join(here, 'ribosome', '__init__.py'), 'rt', encoding='utf8') as f:
-    version = re.search(r'__version__ = \'(.*?)\'', f.read()).group(1)
+def get_readme():
+    with io.open(os.path.join(HERE, 'README.md'), 'rt', encoding='utf8') as f:
+        readme = f.read()
+        return readme
+
+
+def get_version_string():
+    with io.open(os.path.join(HERE, 'ribosome', '__init__.py'), 'rt', encoding='utf8') as f:
+        version = re.search(r'__version__ = \'(.*?)\'', f.read()).group(1)
+        return version
 
 
 setuptools.setup(
     name='ribosome.tool',
-    version=version,
+    version=get_version_string(),
     description='Yet another project deploy and release tool',
-    long_description=readme,
+    long_description=get_readme(),
     # long_description_content_type='text/markdown',
     url='https://github.com/alexandervpetrov/ribosome',
     author='Oleksandr Petrov',
