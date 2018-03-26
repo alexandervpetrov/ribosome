@@ -621,19 +621,17 @@ def release(settings):
 
 @cli.command(short_help='Deploy release artifacts to host')
 @click.argument('version')
-@click.argument('config')
 @click.argument('host')
 @click.pass_obj
 @process_errors
 @unwrap_or_panic
-def deploy(settings, version, config, host):
+def deploy(settings, version, host):
     """Deploy release artifacts to host and prepare for run with chosen configuration.
 
     \b
     Args:
         version: project version to deploy
-        config: configuration to link with
-        host: destination host alias or IP address for SSH access (fabric host string)
+        host: destination host alias (usage of ssh config assumed)
     """
     welcome()
     codons = read_project_codons()
@@ -652,12 +650,12 @@ def deploy(settings, version, config, host):
     # pip install --user pipenv
     # .profile
 
-    if codons.setup_runtime_environment:
-        setup_commands = codons.setup_runtime_environment.get('commands', [])
+    if codons.setup:
+        setup_commands = codons.setup.get('commands', [])
         execute_as_remote_task(setup_runtime_environment, host, release_name, setup_commands)
         log.info('Runtime environment at remote host configured')
 
-    log.info('Release [%s] deployed to host [%s] and configured for runnning as [%s]', release_name, host, config)
+    log.info('Release [%s] successfully deployed at host [%s]', release_name, host)
     return None, None
 
 
