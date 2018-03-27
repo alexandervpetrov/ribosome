@@ -26,7 +26,7 @@ setuptools.setup(
     version=get_version_string(),
     description='Yet another project deploy and release tool',
     long_description=get_readme(),
-    # long_description_content_type='text/markdown',
+    long_description_content_type='text/markdown',
     url='https://github.com/alexandervpetrov/ribosome',
     author='Oleksandr Petrov',
     author_email='alexandervpetrov@gmail.com',
