@@ -10,6 +10,8 @@ import glob
 import os
 import shutil
 import tempfile
+import pathlib
+import io
 
 import click
 import setuptools_scm
@@ -353,7 +355,7 @@ def make_remote_operation(fabric_func, *fixed_args, logstreams=False, **fixed_kw
             kwargs['stdout'] = LogStream(rlog.trace, strip_prefixes)
             kwargs['stderr'] = LogStream(rlog.warn, strip_prefixes)
         remote_operation = functools.partial(fabric_func, *fixed_args, **fixed_kwargs)
-        rlog.debug('[%s]: %s', fabric_func.__name__, ' '.join(args))
+        rlog.debug('[%s]: %s', fabric_func.__name__, ' '.join(map(str, args)))
         result = remote_operation(*args, **kwargs)
         if result.failed:
             if hasattr(result, 'return_code'):
@@ -366,10 +368,11 @@ def make_remote_operation(fabric_func, *fixed_args, logstreams=False, **fixed_kw
 
 
 remote_run = make_remote_operation(fapi.run, logstreams=True, shell=True)
+remote_sudo = make_remote_operation(fapi.sudo, logstreams=True, shell=True)
 remote_put = make_remote_operation(fapi.put)
+remote_get = make_remote_operation(fapi.get)
 
 
-@unwrap_or_panic
 def is_remote_path_exists(filepath, isdir=False, check_read_permission=False):
     check_symbol = 'd' if isdir else 'f'
     result = remote_run('test -{} {}'.format(check_symbol, filepath))
@@ -382,8 +385,8 @@ def is_remote_path_exists(filepath, isdir=False, check_read_permission=False):
     return True, None
 
 
-RELEASES_REMOTE_ROOT = '~/releases'
-PROJECTS_REMOTE_ROOT = '~/projects'
+RELEASES_REMOTE_ROOT = pathlib.PurePosixPath('~/releases')
+PROJECTS_REMOTE_ROOT = pathlib.PurePosixPath('~/projects')
 
 
 def split_release_name(release_name):
@@ -415,9 +418,11 @@ def upload_release(host, release_name, s3bucket, force=False):
     ensure_dir_exists(RELEASES_REMOTE_ROOT)
 
     release_archive_name = derive_archive_name(release_name)
-    remote_release_archive_path = os.path.join(RELEASES_REMOTE_ROOT, release_archive_name)
+    remote_release_archive_path = RELEASES_REMOTE_ROOT.joinpath(release_archive_name)
 
-    release_archive_exists = is_remote_path_exists(remote_release_archive_path, check_read_permission=True)
+    release_archive_exists, error = is_remote_path_exists(remote_release_archive_path, check_read_permission=True)
+    if error is not None:
+        return None, error
 
     if not force and release_archive_exists:
         # TODO: file checksum compare
@@ -430,12 +435,12 @@ def upload_release(host, release_name, s3bucket, force=False):
             s3.Object(s3bucket, release_archive_name).download_file(local_release_archive_path)
             log.debug('Downloaded to: %s', local_release_archive_path)
             log.debug('Uploading release archive to host [%s]...', host)
-            result = remote_put(local_release_archive_path, remote_release_archive_path)
+            result = remote_put(local_release_archive_path, str(remote_release_archive_path))
             if result.failed:
                 return None, 'Failed to upload release archive to remote host'
 
     project_tag, version = split_release_name(release_name)
-    remote_project_root = os.path.join(PROJECTS_REMOTE_ROOT, project_tag)
+    remote_project_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag)
 
     log.debug('Extracting release archive to deploy location...')
     ensure_dir_exists(remote_project_root)
@@ -451,8 +456,8 @@ def upload_release(host, release_name, s3bucket, force=False):
 def setup_runtime_environment(host, release_name, commands):
     log.debug('Starting runtime environment setup...')
     project_tag, version = split_release_name(release_name)
-    remote_project_root = os.path.join(PROJECTS_REMOTE_ROOT, project_tag, release_name)
-    with fapi.cd(remote_project_root):
+    remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
+    with fapi.cd(str(remote_release_root)):
         for command in commands:
             result = remote_run(command)
             if result.failed:
@@ -460,8 +465,138 @@ def setup_runtime_environment(host, release_name, commands):
     return None, None
 
 
+SERVICE_INDEX_NAME = 'services.index.yaml'
+
+
+@fapi.task
+@unwrap_or_panic
+def update_services_index(host, release_name, service, config, include=None):
+    assert include is not None
+    project_tag, version = split_release_name(release_name)
+    remote_project_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag)
+    service_index_path = remote_project_root.joinpath(SERVICE_INDEX_NAME)
+
+    service_index = {}
+
+    service_index_exists, error = is_remote_path_exists(service_index_path, check_read_permission=True)
+    if error is not None:
+        return None, error
+
+    yaml = ryaml.YAML()
+    yaml.default_flow_style = False
+
+    if service_index_exists:
+        # text mode stream or StringIO not working here - don't know why
+        with tempfile.TemporaryFile() as stream:
+            remote_get(str(service_index_path), stream)
+            stream.seek(0)
+            try:
+                service_index = yaml.load(stream)['services']
+            except Exception as e:
+                log.warn('Service index corrupted: %s', e)
+                log.warn('Creating new blank service index')
+                service_index = {}
+
+    key = '{}.{}'.format(service, config)
+    if include:
+        service_index[key] = version
+    else:
+        service_index.pop(key, None)
+
+    service_index = dict(service_index)
+
+    buf = io.StringIO()
+    yaml.dump(dict(services=service_index), buf)
+    remote_put(buf, str(service_index_path))
+
+    return None, None
+
+
+def remote_list_subdirs(host, dirpath):
+    # expand user directory [~]
+    r = remote_run('echo {}'.format(PROJECTS_REMOTE_ROOT))
+    projects_abspath = pathlib.PurePosixPath(str(r))
+    sftp = fabric.sftp.SFTP(host)
+    r = sftp.ftp.listdir(str(projects_abspath))
+    subdirs = [name for name in r if sftp.isdir(str(projects_abspath.joinpath(name)))]
+    return subdirs
+
+
+@fapi.task
+@unwrap_or_panic
+def get_services_index(host, project_tag):
+
+    if project_tag:
+        project_tags = [project_tag]
+    else:
+        project_tags = remote_list_subdirs(host, PROJECTS_REMOTE_ROOT)
+
+    service_indices = {}
+
+    for ptag in project_tags:
+
+        remote_project_root = PROJECTS_REMOTE_ROOT.joinpath(ptag)
+        service_index_path = remote_project_root.joinpath(SERVICE_INDEX_NAME)
+
+        service_index_exists, error = is_remote_path_exists(service_index_path, check_read_permission=True)
+        if error is not None:
+            return None, error
+
+        if not service_index_exists:
+            continue
+
+        yaml = ryaml.YAML()
+
+        # text stream or StringIO not working here
+        with tempfile.TemporaryFile() as stream:
+            remote_get(str(service_index_path), stream)
+            stream.seek(0)
+            try:
+                service_index = yaml.load(stream)['services']
+            except Exception as e:
+                return None, 'Service index of project [{}] corrupted: {}'.format(ptag, e)
+            else:
+                service_index = dict(service_index)
+                service_indices[ptag] = service_index
+
+    return service_indices, None
+
+
+@fapi.task
+@unwrap_or_panic
+def load_service(host, release_name, service, config, commands):
+    log.debug('Loading service...')
+    project_tag, version = split_release_name(release_name)
+    remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
+    with fapi.cd(str(remote_release_root)):
+        for command in commands:
+            command = command.format(service=service, config=config)
+            result = remote_sudo(command)
+            if result.failed:
+                return None, 'Failed to run load service command: {}'.format(command)
+    update_services_index(host, release_name, service, config, include=True)
+    return None, None
+
+
+@fapi.task
+@unwrap_or_panic
+def unload_service(host, release_name, service, config, commands):
+    log.debug('Unloading service...')
+    project_tag, version = split_release_name(release_name)
+    remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
+    with fapi.cd(str(remote_release_root)):
+        for command in commands:
+            command = command.format(service=service, config=config)
+            result = remote_sudo(command)
+            if result.failed:
+                return None, 'Failed to run unload service command: {}'.format(command)
+    update_services_index(host, release_name, service, config, include=False)
+    return None, None
+
+
 def execute_as_remote_task(operation, host, *args, **kwargs):
-    fapi.execute(functools.partial(operation, host, *args, **kwargs), hosts=[host])
+    result = fapi.execute(functools.partial(operation, host, *args, **kwargs), hosts=[host])
+    return result[host]
 
 
 def fabric_global_patch():
@@ -469,6 +604,10 @@ def fabric_global_patch():
     fabric.state.env.warn_only = True
     fabric.state.output.warnings = False
     fabric.state.output.running = False
+
+
+def setup_global_remote_sudo_password(password):
+    fapi.env.sudo_password = password
 
 
 def logging_global_patch():
@@ -554,7 +693,7 @@ def cli(ctx, verbose, force):
 
 @cli.group()
 def version():
-    """Get version or update meta descriptor"""
+    """Show version or update meta descriptor"""
     pass
 
 
@@ -562,7 +701,7 @@ def version():
 @process_errors
 @unwrap_or_panic
 def version_info():
-    """Get project version information"""
+    """Show project version information"""
     welcome()
     codons = read_project_codons()
     scm_info = scm_describe()
@@ -626,7 +765,7 @@ def release(settings):
 @process_errors
 @unwrap_or_panic
 def deploy(settings, version, host):
-    """Deploy release artifacts to host and prepare for run with chosen configuration.
+    """Deploy release artifacts to host and prepare for run.
 
     \b
     Args:
@@ -656,6 +795,170 @@ def deploy(settings, version, host):
         log.info('Runtime environment at remote host configured')
 
     log.info('Release [%s] successfully deployed at host [%s]', release_name, host)
+    return None, None
+
+
+@cli.command(short_help='Load service at remote host')
+@click.option('--password', prompt='[sudo] password for remote host', hide_input=True)
+@click.argument('version')
+@click.argument('service')
+@click.argument('config')
+@click.argument('host')
+@click.pass_obj
+@process_errors
+@unwrap_or_panic
+def load(settings, password, version, service, config, host):
+    """Install and run service with chosen configuration.
+
+    \b
+    Args:
+        version: project version to use
+        service: service name
+        config: configuration name
+        host: destination host alias (usage of ssh config assumed)
+    """
+    setup_global_remote_sudo_password(password)
+    welcome()
+    codons = read_project_codons()
+
+    if service not in codons.services:
+        return None, 'Unknown service: {}'.format(service)
+
+    if config not in codons.services[service].get('configs', {}):
+        return None, 'Unknown service [{}] configuration: {}'.format(service, config)
+
+    if not codons.service or not codons.service.load:
+        return None, 'Service load commands not found'
+
+    load_commands = codons.service.load.get('commands', [])
+    if not load_commands:
+        # TODO: is it right behavior? Consider tracking load status
+        log.info('Service load commands are empty: nothing to do')
+        return None, None
+
+    release_name = derive_release_name(codons, version)
+
+    # TODO: support for service and configuration masks
+
+    execute_as_remote_task(load_service, host, release_name, service, config, load_commands)
+    log.info('Service [%s] configuration [%s] from release [%s] loaded at host [%s]', service, config, release_name, host)
+
+    return None, None
+
+
+@cli.command(short_help='Unload service at remote host')
+@click.option('--password', prompt='[sudo] password for remote host', hide_input=True)
+@click.argument('version')
+@click.argument('service')
+@click.argument('config')
+@click.argument('host')
+@click.pass_obj
+@process_errors
+@unwrap_or_panic
+def unload(settings, password, version, service, config, host):
+    """Stop and uninstall service with chosen configuration.
+
+    \b
+    Args:
+        version: project version to use
+        service: service name
+        config: configuration name
+        host: destination host alias (usage of ssh config assumed)
+    """
+    setup_global_remote_sudo_password(password)
+    welcome()
+    codons = read_project_codons()
+
+    if service not in codons.services:
+        return None, 'Unknown service: {}'.format(service)
+
+    if config not in codons.services[service].get('configs', {}):
+        return None, 'Unknown service [{}] configuration: {}'.format(service, config)
+
+    if not codons.service or not codons.service.unload:
+        return None, 'Service unload commands not found'
+
+    unload_commands = codons.service.unload.get('commands', [])
+    if not unload_commands:
+        # TODO: is it right behavior? Consider tracking load status
+        log.info('Service unload commands are empty: nothing to do')
+        return None, None
+
+    release_name = derive_release_name(codons, version)
+
+    # TODO: support for service and configuration masks
+
+    execute_as_remote_task(unload_service, host, release_name, service, config, unload_commands)
+    log.info('Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, release_name, host)
+
+    return None, None
+
+
+@cli.command(short_help='Run command for service at remote host')
+@click.argument('version')
+@click.argument('service')
+@click.argument('config')
+@click.argument('action')
+@click.argument('host')
+@click.pass_obj
+@process_errors
+@unwrap_or_panic
+def run(settings, version, service, config, action, host):
+    """Run action for service with chosen configuration.
+
+    \b
+    Args:
+        version: project version to use
+        service: service name
+        config: configuration name
+        action: action to run
+        host: destination host alias (usage of ssh config assumed)
+    """
+    welcome()
+    log.error('Not implemented')
+    return None, None
+
+
+@cli.command(short_help='Show loaded services at remote host')
+@click.option('-a', '--all', 'search_all_projects', is_flag=True, help='Search through all projects')
+@click.argument('host')
+@click.pass_obj
+@process_errors
+@unwrap_or_panic
+def show(settings, search_all_projects, host):
+    """Show loaded services at remote host.
+
+    \b
+    Args:
+        host: destination host alias (usage of ssh config assumed)
+    """
+    welcome()
+
+    if search_all_projects:
+        project_tag = None
+    else:
+        codons = read_project_codons()
+        project_tag = codons.project.tag
+
+    service_indices = execute_as_remote_task(get_services_index, host, project_tag)
+
+    if service_indices is None:
+        if search_all_projects:
+            log.info('No services indices found at host [%s]', host)
+        else:
+            log.info('No services index for project [%s] found at host [%s]', project_tag, host)
+    else:
+        if service_indices:
+            for ptag, services_index in service_indices.items():
+                if services_index:
+                    log.info('Project [%s]: services loaded at host [%s]:', ptag, host)
+                    for service_config, version in services_index.items():
+                        log.info('    %s: %s', service_config, version)
+                else:
+                    log.info('Project [%s]: no services found loaded at host [%s]', ptag, host)
+        else:
+            log.info('No services found loaded at host [%s]', host)
+
     return None, None
 
 
