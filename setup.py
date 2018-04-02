@@ -28,7 +28,7 @@ setuptools.setup(
     long_description=get_readme(),
     long_description_content_type='text/markdown',
     url='https://github.com/alexandervpetrov/ribosome',
-    author='Oleksandr Petrov',
+    author='Sashko Petrov',
     author_email='alexandervpetrov@gmail.com',
     license='MIT',
     classifiers=[
