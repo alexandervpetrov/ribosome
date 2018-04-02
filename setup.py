@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os.path
+import os
 import io
 import re
 import setuptools
