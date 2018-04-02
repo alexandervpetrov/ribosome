@@ -603,6 +603,31 @@ def unload_service(host, release_name, service, config, commands):
     return None, None
 
 
+def find_service_configs(codons, services_pattern, configs_pattern):
+
+    def derive_regexp(pattern):
+        prefix = ''
+        suffix = ''
+        if pattern.startswith('*'):
+            prefix = '\w+'
+            pattern = pattern[1:]
+        if '*' not in pattern:
+            suffix = '\w*'
+        regexp = '^' + prefix + pattern.replace('*', '\w*') + suffix + '$'
+        return re.compile(regexp)
+
+    services_regexps = [derive_regexp(pattern) for pattern in services_pattern.split(',')]
+    configs_regexps = [derive_regexp(pattern) for pattern in configs_pattern.split(',')]
+
+    matches = []
+    for service, descriptor in codons.services.items():
+        if any(pattern.match(service) for pattern in services_regexps):
+            for config in descriptor.get('configs', []):
+                if any(pattern.match(config) for pattern in configs_regexps):
+                    matches.append((service, config))
+    return matches
+
+
 def execute_as_remote_task(operation, host, *args, **kwargs):
     result = fapi.execute(functools.partial(operation, host, *args, **kwargs), hosts=[host])
     return result[host]
@@ -810,8 +835,8 @@ def deploy(settings, version, host):
 @cli.command(short_help='Load service at remote host')
 @click.option('--password', prompt='[sudo] password for remote host', hide_input=True)
 @click.argument('version')
-@click.argument('service')
-@click.argument('config')
+@click.argument('service', type=str)
+@click.argument('config', type=str)
 @click.argument('host')
 @click.pass_obj
 @process_errors
@@ -830,11 +855,13 @@ def load(settings, password, version, service, config, host):
     welcome()
     codons = read_project_codons()
 
-    if service not in codons.services:
-        return None, 'Unknown service: {}'.format(service)
+    matches = find_service_configs(codons, service, config)
 
-    if config not in codons.services[service].get('configs', {}):
-        return None, 'Unknown service [{}] configuration: {}'.format(service, config)
+    if not matches:
+        log.info('No matched service configs found: nothing to do')
+        return None, None
+
+    log.debug('Service configs matched: %s', matches)
 
     if not codons.service or not codons.service.load:
         return None, 'Service load commands not found'
@@ -847,10 +874,10 @@ def load(settings, password, version, service, config, host):
 
     release_name = derive_release_name(codons, version)
 
-    # TODO: support for service and configuration masks
-
-    execute_as_remote_task(load_service, host, release_name, service, config, load_commands)
-    log.info('Service [%s] configuration [%s] from release [%s] loaded at host [%s]', service, config, release_name, host)
+    for service, config in matches:
+        log.debug('Processing service [%s] configuration [%s]...', service, config)
+        execute_as_remote_task(load_service, host, release_name, service, config, load_commands)
+        log.info('Service [%s] configuration [%s] from release [%s] loaded at host [%s]', service, config, release_name, host)
 
     return None, None
 
@@ -878,11 +905,13 @@ def unload(settings, password, version, service, config, host):
     welcome()
     codons = read_project_codons()
 
-    if service not in codons.services:
-        return None, 'Unknown service: {}'.format(service)
+    matches = find_service_configs(codons, service, config)
 
-    if config not in codons.services[service].get('configs', {}):
-        return None, 'Unknown service [{}] configuration: {}'.format(service, config)
+    if not matches:
+        log.info('No matched service configs found: nothing to do')
+        return None, None
+
+    log.debug('Service configs matched: %s', matches)
 
     if not codons.service or not codons.service.unload:
         return None, 'Service unload commands not found'
@@ -895,10 +924,10 @@ def unload(settings, password, version, service, config, host):
 
     release_name = derive_release_name(codons, version)
 
-    # TODO: support for service and configuration masks
-
-    execute_as_remote_task(unload_service, host, release_name, service, config, unload_commands)
-    log.info('Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, release_name, host)
+    for service, config in matches:
+        log.debug('Processing service [%s] configuration [%s]...', service, config)
+        execute_as_remote_task(unload_service, host, release_name, service, config, unload_commands)
+        log.info('Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, release_name, host)
 
     return None, None
 
