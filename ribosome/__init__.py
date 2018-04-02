@@ -228,8 +228,13 @@ def derive_release_name(codons, version):
     return '{}-{}'.format(codons.project.tag, version)
 
 
-def derive_archive_name(name):
-    return '{}.tar.xz'.format(name)
+def derive_archive_name(release_name):
+    return '{}.tar.xz'.format(release_name)
+
+
+def derive_s3_path(project_tag, release_name):
+    release_archive_name = derive_archive_name(release_name)
+    return '{}/{}'.format(project_tag, release_archive_name)
 
 
 def is_s3_object_exists(s3, bucket, name):
@@ -276,7 +281,10 @@ def publish_release(codons, release_name, force=False):
     if not codons.release.publish:
         return None, 'Codons for publishing not found. Nothing to do for release'
 
+    project_tag = codons.project.tag
+
     release_archive_name = derive_archive_name(release_name)
+    release_s3_path = derive_s3_path(project_tag, release_name)
 
     with tempfile.TemporaryDirectory() as tempdir:
         log.debug('Making artifacts...')
@@ -301,9 +309,9 @@ def publish_release(codons, release_name, force=False):
             log.debug('Publishing to Amazon S3...')
             s3bucket = codons.release.publish.s3bucket
             s3 = boto3.resource('s3')
-            if not force and is_s3_object_exists(s3, s3bucket, release_archive_name):
+            if not force and is_s3_object_exists(s3, s3bucket, release_s3_path):
                 return None, 'Release [{}] already published at Amazon S3 bucket [{}]'.format(release_name, s3bucket)
-            s3.Object(s3bucket, release_archive_name).upload_file(release_archive_path)
+            s3.Object(s3bucket, release_s3_path).upload_file(release_archive_path)
 
     return None, None
 
@@ -400,12 +408,14 @@ def upload_release(host, release_name, s3bucket, force=False):
     log.debug('Starting release upload process...')
 
     release_archive_name = derive_archive_name(release_name)
+    project_tag, version = split_release_name(release_name)
+    release_s3_path = derive_s3_path(project_tag, release_name)
 
     s3 = boto3.resource('s3')
 
     log.debug('Checking artifacts...')
 
-    if not is_s3_object_exists(s3, s3bucket, release_archive_name):
+    if not is_s3_object_exists(s3, s3bucket, release_s3_path):
         return None, 'Release [{}] not found at S3 bucket [{}]'.format(release_name, s3bucket)
 
     @unwrap_or_panic
@@ -432,14 +442,13 @@ def upload_release(host, release_name, s3bucket, force=False):
         with tempfile.TemporaryDirectory() as tempdir:
             local_release_archive_path = os.path.join(tempdir, release_archive_name)
             log.debug('Downloading release from Amazon S3...')
-            s3.Object(s3bucket, release_archive_name).download_file(local_release_archive_path)
+            s3.Object(s3bucket, release_s3_path).download_file(local_release_archive_path)
             log.debug('Downloaded to: %s', local_release_archive_path)
             log.debug('Uploading release archive to host [%s]...', host)
             result = remote_put(local_release_archive_path, str(remote_release_archive_path))
             if result.failed:
                 return None, 'Failed to upload release archive to remote host'
 
-    project_tag, version = split_release_name(release_name)
     remote_project_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag)
 
     log.debug('Extracting release archive to deploy location...')
