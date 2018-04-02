@@ -64,8 +64,8 @@ def get_codons():
     log.debug('Reading codons...')
     yaml = ryaml.YAML()
     try:
-        with open('codons.yaml') as f:
-            codons = yaml.load(f)
+        with io.open('codons.yaml', encoding='utf-8') as istream:
+            codons = yaml.load(istream)
     except FileNotFoundError:
         return None, 'Failed to find codons file: codons.yaml'
     except Exception as e:
@@ -147,7 +147,7 @@ def write_meta(codons, version):
         return None, 'Unsupported meta descriptor format: {}'.format(codons.meta.format)
     filename, template = META_SPEC[codons.meta.format]
     try:
-        with open(filename, 'w') as ostream:
+        with io.open(filename, 'w', encoding='utf-8') as ostream:
             ostream.write(template.format(**metadata))
     except Exception as e:
         return None, 'Failed to write {}: {}'.format(filename, e)
