@@ -611,8 +611,6 @@ def find_service_configs(codons, services_pattern, configs_pattern):
         if pattern.startswith('*'):
             prefix = '\w+'
             pattern = pattern[1:]
-        if '*' not in pattern:
-            suffix = '\w*'
         regexp = '^' + prefix + pattern.replace('*', '\w*') + suffix + '$'
         return re.compile(regexp)
 
@@ -990,7 +988,8 @@ def show(settings, search_all_projects, host):
             for ptag, services_index in service_indices.items():
                 if services_index:
                     log.info('Project [%s]: services loaded at host [%s]:', ptag, host)
-                    for service_config, version in services_index.items():
+                    index = sorted(list(services_index.items()), key=lambda t: t[0])
+                    for service_config, version in index:
                         log.info('    %s: %s', service_config, version)
                 else:
                     log.info('Project [%s]: no services found loaded at host [%s]', ptag, host)
