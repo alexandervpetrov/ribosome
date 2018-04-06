@@ -506,13 +506,23 @@ def update_services_index(host, release_name, service, config, include=None):
                 log.warn('Creating new blank service index')
                 service_index = {}
 
-    key = '{}.{}'.format(service, config)
-    if include:
-        service_index[key] = version
-    else:
-        service_index.pop(key, None)
+    if service not in service_index:
+        service_index[service] = {}
 
-    service_index = dict(service_index)
+    if include:
+        service_index[service][config] = version
+    else:
+        service_index[service].pop(config, None)
+        if not service_index[service]:
+            service_index.pop(service, None)
+
+    def make_dict(obj):
+        if isinstance(obj, dict):
+            return {k: make_dict(v) for k,v in obj.items()}
+        else:
+            return obj
+
+    service_index = make_dict(service_index)
 
     buf = io.StringIO()
     yaml.dump(dict(services=service_index), buf)
@@ -864,16 +874,30 @@ def load(settings, password, version, service, config, host):
     if not codons.service or not codons.service.load:
         return None, 'Service load commands not found'
 
+    if not codons.service or not codons.service.unload:
+        return None, 'Service unload commands not found'
+
     load_commands = codons.service.load.get('commands', [])
     if not load_commands:
         # TODO: is it right behavior? Consider tracking load status
         log.info('Service load commands are empty: nothing to do')
         return None, None
 
+    unload_commands = codons.service.unload.get('commands', [])
+
     release_name = derive_release_name(codons, version)
+
+    project_tag = codons.project.tag
+    service_indices = execute_as_remote_task(get_services_index, host, project_tag)
+    project_service_index = service_indices.get(project_tag) if service_indices is not None else {}
 
     for service, config in matches:
         log.debug('Processing service [%s] configuration [%s]...', service, config)
+        if service in project_service_index and config in project_service_index[service]:
+            execute_as_remote_task(unload_service, host, release_name, service, config, unload_commands)
+            old_version_loaded = project_service_index[service][config]
+            old_service_release_name = derive_release_name(codons, old_version_loaded)
+            log.info('Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, old_service_release_name, host)
         execute_as_remote_task(load_service, host, release_name, service, config, load_commands)
         log.info('Service [%s] configuration [%s] from release [%s] loaded at host [%s]', service, config, release_name, host)
 
@@ -988,9 +1012,12 @@ def show(settings, search_all_projects, host):
             for ptag, services_index in service_indices.items():
                 if services_index:
                     log.info('Project [%s]: services loaded at host [%s]:', ptag, host)
-                    index = sorted(list(services_index.items()), key=lambda t: t[0])
-                    for service_config, version in index:
-                        log.info('    %s: %s', service_config, version)
+                    index = []
+                    for service, configs in services_index.items():
+                        index.extend((service, config, version) for config, version in configs.items())
+                    index = sorted(index)
+                    for service, config, version in index:
+                        log.info('    %s.%s: %s', service, config, version)
                 else:
                     log.info('Project [%s]: no services found loaded at host [%s]', ptag, host)
         else:
