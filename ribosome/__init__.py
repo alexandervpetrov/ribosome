@@ -224,8 +224,8 @@ def make_scm_archive(target_dir):
     return None, None
 
 
-def derive_release_name(codons, version):
-    return '{}-{}'.format(codons.project.tag, version)
+def derive_release_name(project_tag, version):
+    return '{}-{}'.format(project_tag, version)
 
 
 def derive_archive_name(release_name):
@@ -583,32 +583,67 @@ def get_services_index(host, project_tag):
 
 @fapi.task
 @unwrap_or_panic
-def load_service(host, release_name, service, config, commands):
-    log.debug('Loading service...')
-    project_tag, version = split_release_name(release_name)
+def get_remote_codons(host, project_tag, release_name):
+
+    remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
+    codons_path = remote_release_root.joinpath('codons.yaml')
+
+    codons_exists, error = is_remote_path_exists(codons_path, check_read_permission=True)
+    if error is not None:
+        return None, error
+    if not codons_exists:
+        return None, 'Codons not found for release [{}] at host [{}]'.format(release_name, host)
+
+    yaml = ryaml.YAML()
+
+    # text stream or StringIO not working here
+    with tempfile.TemporaryFile() as stream:
+        remote_get(str(codons_path), stream)
+        stream.seek(0)
+        try:
+            codons = yaml.load(stream)
+        except Exception as e:
+            return None, 'Codons corrupted for release [{}] at host [{}]: {}'.format(release_name, host, e)
+        else:
+            return as_object(codons), None
+
+
+@fapi.task
+@unwrap_or_panic
+def run_service_commands(host, project_tag, release_name, service, config, commands, sudo=False):
+    runner = remote_sudo if sudo else remote_run
     remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
     with fapi.cd(str(remote_release_root)):
         for command in commands:
             command = command.format(service=service, config=config)
-            result = remote_sudo(command)
+            result = runner(command)
             if result.failed:
-                return None, 'Failed to run load service command: {}'.format(command)
+                return None, 'Failed to run service command: {}'.format(command)
+    return None, None
+
+
+@fapi.task
+@unwrap_or_panic
+def load_service(host, project_tag, release_name, service, config):
+    log.debug('Loading service...')
+    codons = get_remote_codons(host, project_tag, release_name)
+    if not codons.service or not codons.service.load:
+        return None, 'Service load commands not found'
+    load_commands = codons.service.load.get('commands', [])
+    run_service_commands(host, project_tag, release_name, service, config, load_commands, sudo=True)
     update_services_index(host, release_name, service, config, include=True)
     return None, None
 
 
 @fapi.task
 @unwrap_or_panic
-def unload_service(host, release_name, service, config, commands):
+def unload_service(host, project_tag, release_name, service, config):
     log.debug('Unloading service...')
-    project_tag, version = split_release_name(release_name)
-    remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
-    with fapi.cd(str(remote_release_root)):
-        for command in commands:
-            command = command.format(service=service, config=config)
-            result = remote_sudo(command)
-            if result.failed:
-                return None, 'Failed to run unload service command: {}'.format(command)
+    codons = get_remote_codons(host, project_tag, release_name)
+    if not codons.service or not codons.service.unload:
+        return None, 'Service unload commands not found'
+    unload_commands = codons.service.unload.get('commands', [])
+    run_service_commands(host, project_tag, release_name, service, config, unload_commands, sudo=True)
     update_services_index(host, release_name, service, config, include=False)
     return None, None
 
@@ -794,7 +829,7 @@ def release(settings):
         run_commands('Running tests', commands)
         log.info('Tests completed')
     if codons.release:
-        release_name = derive_release_name(codons, version)
+        release_name = derive_release_name(codons.project.tag, version)
         publish_release(codons, release_name, force=settings.force)
         log.info('Release [%s] published', release_name)
     return None, None
@@ -822,7 +857,7 @@ def deploy(settings, version, host):
     if not codons.release or not codons.release.publish or not codons.release.publish.s3bucket:
         return None, 'Codons for Amazon S3 not found. Don\'t know how to get artifact for deploying'
 
-    release_name = derive_release_name(codons, version)
+    release_name = derive_release_name(codons.project.tag, version)
     s3bucket = codons.release.publish.s3bucket
 
     execute_as_remote_task(upload_release, host, release_name, s3bucket, force=settings.force)
@@ -831,8 +866,10 @@ def deploy(settings, version, host):
     # pip install --user pipenv
     # .profile
 
-    if codons.setup:
-        setup_commands = codons.setup.get('commands', [])
+    remote_codons = execute_as_remote_task(get_remote_codons, host, codons.project.tag, release_name)
+
+    if remote_codons.setup:
+        setup_commands = remote_codons.setup.get('commands', [])
         execute_as_remote_task(setup_runtime_environment, host, release_name, setup_commands)
         log.info('Runtime environment at remote host configured')
 
@@ -861,44 +898,30 @@ def load(settings, password, version, service, config, host):
     """
     setup_global_remote_sudo_password(password)
     welcome()
-    codons = read_project_codons()
+    local_codons = read_project_codons()
 
+    project_tag = local_codons.project.tag
+    release_name = derive_release_name(project_tag, version)
+
+    service_indices = execute_as_remote_task(get_services_index, host, project_tag)
+    project_service_index = service_indices.get(project_tag) if service_indices is not None else {}
+
+    codons = execute_as_remote_task(get_remote_codons, host, project_tag, release_name)
     matches = find_service_configs(codons, service, config)
-
     if not matches:
         log.info('No matched service configs found: nothing to do')
         return None, None
 
     log.debug('Service configs matched: %s', matches)
 
-    if not codons.service or not codons.service.load:
-        return None, 'Service load commands not found'
-
-    if not codons.service or not codons.service.unload:
-        return None, 'Service unload commands not found'
-
-    load_commands = codons.service.load.get('commands', [])
-    if not load_commands:
-        # TODO: is it right behavior? Consider tracking load status
-        log.info('Service load commands are empty: nothing to do')
-        return None, None
-
-    unload_commands = codons.service.unload.get('commands', [])
-
-    release_name = derive_release_name(codons, version)
-
-    project_tag = codons.project.tag
-    service_indices = execute_as_remote_task(get_services_index, host, project_tag)
-    project_service_index = service_indices.get(project_tag) if service_indices is not None else {}
-
     for service, config in matches:
         log.debug('Processing service [%s] configuration [%s]...', service, config)
         if service in project_service_index and config in project_service_index[service]:
-            execute_as_remote_task(unload_service, host, release_name, service, config, unload_commands)
             old_version_loaded = project_service_index[service][config]
-            old_service_release_name = derive_release_name(codons, old_version_loaded)
+            old_service_release_name = derive_release_name(project_tag, old_version_loaded)
+            execute_as_remote_task(unload_service, host, project_tag, old_service_release_name, service, config)
             log.info('Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, old_service_release_name, host)
-        execute_as_remote_task(load_service, host, release_name, service, config, load_commands)
+        execute_as_remote_task(load_service, host, project_tag, release_name, service, config)
         log.info('Service [%s] configuration [%s] from release [%s] loaded at host [%s]', service, config, release_name, host)
 
     return None, None
@@ -925,30 +948,22 @@ def unload(settings, password, version, service, config, host):
     """
     setup_global_remote_sudo_password(password)
     welcome()
-    codons = read_project_codons()
+    local_codons = read_project_codons()
 
+    project_tag = local_codons.project.tag
+    release_name = derive_release_name(project_tag, version)
+
+    codons = execute_as_remote_task(get_remote_codons, host, project_tag, release_name)
     matches = find_service_configs(codons, service, config)
-
     if not matches:
         log.info('No matched service configs found: nothing to do')
         return None, None
 
     log.debug('Service configs matched: %s', matches)
 
-    if not codons.service or not codons.service.unload:
-        return None, 'Service unload commands not found'
-
-    unload_commands = codons.service.unload.get('commands', [])
-    if not unload_commands:
-        # TODO: is it right behavior? Consider tracking load status
-        log.info('Service unload commands are empty: nothing to do')
-        return None, None
-
-    release_name = derive_release_name(codons, version)
-
     for service, config in matches:
         log.debug('Processing service [%s] configuration [%s]...', service, config)
-        execute_as_remote_task(unload_service, host, release_name, service, config, unload_commands)
+        execute_as_remote_task(unload_service, host, project_tag, release_name, service, config)
         log.info('Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, release_name, host)
 
     return None, None
