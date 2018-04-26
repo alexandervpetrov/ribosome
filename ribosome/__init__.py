@@ -185,7 +185,7 @@ def run_job(args, env=None):
             output_consumed = not output
             if job_finished and output_consumed:
                 break
-            output = output.decode('utf-8').rstrip()
+            output = output.decode('utf-8', 'replace').rstrip()
             if output:
                 joblog.trace(output)
     except Exception as e:
