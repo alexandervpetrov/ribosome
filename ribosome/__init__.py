@@ -59,6 +59,59 @@ def unwrap_or_panic(f):
     return decorator
 
 
+CODONS_TEMPLATE = """
+project:
+  tag: {project_tag}
+
+meta:
+  format: python
+
+codestyle:
+  commands:
+    #- make codestyle
+
+build:
+  commands:
+    #- make build
+
+test:
+  commands:
+    #- make test
+
+release:
+  include:
+    #- meta.py
+  publish:
+    # s3bucket: <bucket-name>
+    # localdir: ..
+
+setup:
+  commands:
+    #- make setup
+
+# [service] and [config] variables will be formatted into command string
+# will run with sudo
+service:
+  load:
+    commands:
+      #- pipenv run ./service.py install {{service}} {{config}}
+      #- pipenv run ./service.py start {{service}} {{config}}
+  unload:
+    commands:
+      #- pipenv run ./service.py uninstall {{service}} {{config}}
+
+services:
+  # <service_name>:
+  #   configs:
+  #     - <config1>
+  #     - <config2>
+"""
+
+
+def get_clean_codons(project_tag):
+    return CODONS_TEMPLATE.format(project_tag=project_tag)
+
+
 @unwrap_or_panic
 def get_codons():
     log.debug('Reading codons...')
@@ -766,6 +819,24 @@ def cli(ctx, verbose, force):
     }
     ctx.obj = as_object(settings)
     setup_logging(verbose=verbose)
+
+
+@cli.command(short_help='Initialize Ribosome project')
+@click.pass_obj
+@process_errors
+@unwrap_or_panic
+def init(settings):
+    """Initialize current directory with codons.yaml"""
+    welcome()
+    current_dir = pathlib.Path.cwd()
+    codons_path = current_dir.joinpath('codons.yaml')
+    if codons_path.exists():
+        return None, 'Current directory already contains codons.yaml'
+    project_tag = current_dir.name
+    codons_yaml = get_clean_codons(project_tag)
+    with io.open(codons_path, 'w', encoding='utf-8') as ostream:
+        ostream.write(codons_yaml)
+    return None, None
 
 
 @cli.group()
