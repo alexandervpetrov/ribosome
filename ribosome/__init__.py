@@ -259,6 +259,8 @@ def check_scm_status_for_release(scm_info):
 
 @unwrap_or_panic
 def run_commands(job_name, commands):
+    if not commands:
+        return None, None
     log.debug('%s...', job_name)
     for command in commands:
         returncode = run_job(command.split())
@@ -269,10 +271,25 @@ def run_commands(job_name, commands):
 
 @unwrap_or_panic
 def make_scm_archive(target_dir):
-    args = ['hg', 'archive', target_dir]
-    returncode = run_job(args)
-    if returncode != 0:
-        return None, 'Making SCM archive failed'
+    current_dir = pathlib.Path.cwd()
+    if current_dir.joinpath('.hg').exists():
+        args = ['hg', 'archive', target_dir]
+        returncode = run_job(args)
+        if returncode != 0:
+            return None, 'Making SCM archive failed'
+    elif current_dir.joinpath('.git').exists():
+        with tempfile.TemporaryDirectory() as tempdir:
+            archive = os.path.join(tempdir, 'archive.tar')
+            args = ['git', 'archive', '--format=tar', '--output={}'.format(archive), 'HEAD']
+            returncode = run_job(args)
+            if returncode != 0:
+                return None, 'Making SCM archive failed'
+            args = ['tar', '--extract', '--file={}'.format(archive), '--directory={}'.format(target_dir)]
+            returncode = run_job(args)
+            if returncode != 0:
+                return None, 'Making SCM archive failed'
+    else:
+        return None, 'No .git or .hg repository found'
     return None, None
 
 
@@ -515,6 +532,8 @@ def upload_release(host, release_name, s3bucket, force=False):
 @fapi.task
 @unwrap_or_panic
 def setup_runtime_environment(host, release_name, commands):
+    if not commands:
+        return None, None
     log.debug('Starting runtime environment setup...')
     project_tag, version = split_release_name(release_name)
     remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
@@ -663,6 +682,8 @@ def get_remote_codons(host, project_tag, release_name):
 @fapi.task
 @unwrap_or_panic
 def run_service_commands(host, project_tag, release_name, service, config, commands, sudo=False):
+    if not commands:
+        return None, None
     runner = remote_sudo if sudo else remote_run
     remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
     with fapi.cd(str(remote_release_root)):
@@ -977,7 +998,7 @@ def load(settings, password, version, service, config, host):
     release_name = derive_release_name(project_tag, version)
 
     service_indices = execute_as_remote_task(get_services_index, host, project_tag)
-    project_service_index = service_indices.get(project_tag) if service_indices is not None else {}
+    project_service_index = service_indices.get(project_tag, {}) if service_indices is not None else {}
 
     codons = execute_as_remote_task(get_remote_codons, host, project_tag, release_name)
     matches = find_service_configs(codons, service, config)
@@ -1026,6 +1047,9 @@ def unload(settings, password, version, service, config, host):
     project_tag = local_codons.project.tag
     release_name = derive_release_name(project_tag, version)
 
+    service_indices = execute_as_remote_task(get_services_index, host, project_tag)
+    project_service_index = service_indices.get(project_tag, {}) if service_indices is not None else {}
+
     codons = execute_as_remote_task(get_remote_codons, host, project_tag, release_name)
     matches = find_service_configs(codons, service, config)
     if not matches:
@@ -1036,6 +1060,11 @@ def unload(settings, password, version, service, config, host):
 
     for service, config in matches:
         log.debug('Processing service [%s] configuration [%s]...', service, config)
+        if service in project_service_index and config in project_service_index[service]:
+            version_loaded = project_service_index[service][config]
+            if version != version_loaded:
+                log.warn('Skipping unload service [%s] config [%s]: version loaded [%s] does not match requested [%s]', service, config, version_loaded, version)
+                continue
         execute_as_remote_task(unload_service, host, project_tag, release_name, service, config)
         log.info('Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, release_name, host)
 
