@@ -64,41 +64,41 @@ project:
   tag: {project_tag}
 
 meta:
-  format: python
+  # format: python
 
 codestyle:
   commands:
-    #- make codestyle
+    # - make codestyle
 
 build:
   commands:
-    #- make build
+    # - make build
 
 test:
   commands:
-    #- make test
+    # - make test
 
 release:
   include:
-    #- meta.py
+    # - meta.py
   publish:
     # s3bucket: <bucket-name>
     # localdir: ..
 
 setup:
   commands:
-    #- make setup
+    # - make setup
 
 # [service] and [config] variables will be formatted into command string
 # will run with sudo
 service:
   load:
     commands:
-      #- pipenv run ./service.py install {{service}} {{config}}
-      #- pipenv run ./service.py start {{service}} {{config}}
+      # - pipenv run ./service.py install {service} {config}
+      # - pipenv run ./service.py start {service} {config}
   unload:
     commands:
-      #- pipenv run ./service.py uninstall {{service}} {{config}}
+      # - pipenv run ./service.py uninstall {service} {config}
 
 services:
   # <service_name>:
@@ -867,6 +867,8 @@ def version_update():
     scm_info = scm_describe()
     version = derive_version_string(scm_info)
     log.info('Got version: %s', version)
+    if not codons.meta:
+        return None, 'No meta descriptor settings defined'
     filename = write_meta(codons, version)
     log.info('Meta descriptor updated: %s', filename)
     return None, None
@@ -884,8 +886,9 @@ def release(settings):
     version = derive_version_string(scm_info)
     log.info('Got version: %s', version)
     check_scm_status_for_release(scm_info)
-    filename = write_meta(codons, version)
-    log.info('Meta descriptor updated: %s', filename)
+    if codons.meta:
+        filename = write_meta(codons, version)
+        log.info('Meta descriptor updated: %s', filename)
     if codons.codestyle:
         commands = codons.codestyle.get('commands', [])
         run_commands('Checking code style', commands)
