@@ -94,11 +94,11 @@ setup:
 service:
   load:
     commands:
-      # - pipenv run ./service.py install {service} {config}
-      # - pipenv run ./service.py start {service} {config}
+      # - pipenv run ./service.py install {{service}} {{config}}
+      # - pipenv run ./service.py start {{service}} {{config}}
   unload:
     commands:
-      # - pipenv run ./service.py uninstall {service} {config}
+      # - pipenv run ./service.py uninstall {{service}} {{config}}
 
 services:
   # <service_name>:
