@@ -134,6 +134,7 @@ def scm_describe(root='.'):
     if v is None:
         return None, 'No SCM information found'
     info = {
+        'branch': v.branch,
         'tag': str(v.tag),
         'distance': v.distance,
         'node': v.node,
@@ -167,11 +168,9 @@ def derive_version_string(scm_info):
         return None, 'Invalid SCM tag: {}'.format(tag)
     vs = tag
     if scm_info.distance is not None:
-        assert scm_info.node
         vs += '.post{}'.format(scm_info.distance)
-    if scm_info.node:
-        assert scm_info.distance is not None
-        vs += '+{}'.format(scm_info.node)
+        if scm_info.node:
+            vs += '+{}'.format(scm_info.node)
     if scm_info.dirty:
         vs += '.d{:%Y%m%d}'.format(dt.datetime.now(dt.timezone.utc))
     return vs, None
