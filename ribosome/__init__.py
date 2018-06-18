@@ -1111,6 +1111,8 @@ def show(settings, search_all_projects, host):
     """
     welcome()
 
+    log.info('Inspecting services at host [%s]...', host)
+
     if search_all_projects:
         project_tag = None
     else:
@@ -1121,24 +1123,24 @@ def show(settings, search_all_projects, host):
 
     if service_indices is None:
         if search_all_projects:
-            log.info('No services indices found at host [%s]', host)
+            log.info('No services indices found')
         else:
-            log.info('No services index for project [%s] found at host [%s]', project_tag, host)
+            log.info('No services index for project [%s] found', project_tag)
     else:
         if service_indices:
             for ptag, services_index in service_indices.items():
                 if services_index:
-                    log.info('Project [%s]: services loaded at host [%s]:', ptag, host)
+                    log.info('Project [%s]: services loaded:', ptag)
                     index = []
                     for service, configs in services_index.items():
                         index.extend((service, config, version) for config, version in configs.items())
                     index = sorted(index)
                     for service, config, version in index:
-                        log.info('    %s.%s: %s', service, config, version)
+                        log.info('    %s/%s: %s', service, config, version)
                 else:
-                    log.info('Project [%s]: no services found loaded at host [%s]', ptag, host)
+                    log.info('Project [%s]: no loaded services found', ptag)
         else:
-            log.info('No services found loaded at host [%s]', host)
+            log.info('No loaded services found')
 
     return None, None
 
