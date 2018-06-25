@@ -1,3 +1,4 @@
+"""Functionality of this modules adopted from [setuptools_scm] package."""
 
 import pathlib
 
