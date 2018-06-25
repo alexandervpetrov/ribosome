@@ -51,7 +51,6 @@ setuptools.setup(
         'click',
         'ruamel.yaml',
         'coloredlogs',
-        'setuptools-scm',
         'boto3',
         'fabric3',
     ],
