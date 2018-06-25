@@ -83,7 +83,7 @@ def identify_repo(rootpath):
 def find_latest_version_tag(rootpath):
     """Gets all tags containing a '.' from oldest to newest"""
     output, error = utils.run(
-        ["hg", "log", "-r", "ancestors(.) and tag('re:\.')", "--template", "{tags}\n"],
+        ["hg", "log", "-r", r"ancestors(.) and tag('re:\.')", "--template", "{tags}\n"],
         cwd=rootpath,
         errormsg='Failed to find latest tag',
     )
@@ -115,11 +115,11 @@ def graph_distance(rootpath, rev1, rev2="."):
 def changes_since_tag(rootpath, tag):
     assert tag
     revset = (
-        "(branch(.)"  # look for revisions in this branch only
-        " and tag({tag!r})::."  # after the last tag
+        r"(branch(.)"  # look for revisions in this branch only
+        r" and tag({tag!r})::."  # after the last tag
         # ignore commits that only modify .hgtags and nothing else:
-        " and (merge() or file('re:^(?!\.hgtags).*$'))"
-        " and not tag({tag!r}))"  # ignore the tagged commit itself
+        r" and (merge() or file('re:^(?!\.hgtags).*$'))"
+        r" and not tag({tag!r}))"  # ignore the tagged commit itself
     ).format(tag=tag)
     output, error = utils.run(
         ["hg", "log", "-r", revset, "--template", "{node|short}\n"],

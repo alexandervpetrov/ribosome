@@ -612,7 +612,7 @@ def update_services_index(host, release_name, service, config, include=None):
 
     def make_dict(obj):
         if isinstance(obj, dict):
-            return {k: make_dict(v) for k,v in obj.items()}
+            return {k: make_dict(v) for k, v in obj.items()}
         else:
             return obj
 
@@ -747,12 +747,12 @@ def unload_service(host, project_tag, release_name, service, config):
 def find_service_configs(codons, services_pattern, configs_pattern):
 
     def derive_regexp(pattern):
-        prefix = ''
-        suffix = ''
-        if pattern.startswith('*'):
-            prefix = '\w+'
+        prefix = r''
+        suffix = r''
+        if pattern.startswith(r'*'):
+            prefix = r'\w+'
             pattern = pattern[1:]
-        regexp = '^' + prefix + pattern.replace('*', '\w*') + suffix + '$'
+        regexp = r'^' + prefix + pattern.replace(r'*', r'\w*') + suffix + r'$'
         return re.compile(regexp)
 
     services_regexps = [derive_regexp(pattern) for pattern in services_pattern.split(',')]
