@@ -14,13 +14,14 @@ import pathlib
 import io
 
 import click
-import setuptools_scm
 import coloredlogs
 import ruamel.yaml as ryaml
 import boto3
 import botocore
 import fabric
 import fabric.api as fapi
+
+from ribosome import scminfo
 
 # TODO: move from [fabric] to [paramiko]
 
@@ -130,18 +131,11 @@ def get_codons():
 @unwrap_or_panic
 def scm_describe(root='.'):
     log.debug('Getting SCM repository info...')
-    v = setuptools_scm.version_from_scm(root)
-    if v is None:
-        return None, 'No SCM information found'
-    info = {
-        'branch': v.branch,
-        'tag': str(v.tag),
-        'distance': v.distance,
-        'node': v.node,
-        'dirty': v.dirty,
-    }
+    # TODO: get outgoing changes status info
+    info, error = scminfo.describe(root)
+    if error is not None:
+        return None, error
     log.debug('Got SCM info: %s', info)
-    # TODO: get [hg out] status info
     return as_object(info), None
 
 
@@ -167,10 +161,10 @@ def derive_version_string(scm_info):
     if not is_valid_version(tag):
         return None, 'Invalid SCM tag: {}'.format(tag)
     vs = tag
-    if scm_info.distance is not None:
+    if scm_info.changes > 0:
         vs += '.post{}'.format(scm_info.distance)
-        if scm_info.node:
-            vs += '+{}'.format(scm_info.node)
+        if scm_info.revision:
+            vs += '+{}'.format(scm_info.revision)
     if scm_info.dirty:
         vs += '.d{:%Y%m%d}'.format(dt.datetime.now(dt.timezone.utc))
     return vs, None
@@ -179,8 +173,17 @@ def derive_version_string(scm_info):
 META_PYTHON = """
 # This file is generated. Do not edit or store under version control.
 
-project = '{project}'
-version = '{version}'
+project = {project}
+version = {version}
+
+revision = {revision}
+branch = {branch}
+tag = {tag}
+distance = {distance}
+changes = {changes}
+dirty = {dirty}
+
+generated = {generated}
 """
 
 META_SPEC = {
@@ -188,13 +191,31 @@ META_SPEC = {
 }
 
 
+def fmt_python(obj):
+    if isinstance(obj, bool) or isinstance(obj, int):
+        return "{}".format(obj)
+    elif isinstance(obj, dt.datetime):
+        return "'{}'".format(obj.isoformat())
+    else:
+        return "'{}'".format(obj)
+
+
 @unwrap_or_panic
-def write_meta(codons, version):
+def write_meta(codons, version, scm_info):
     log.debug('Writing meta descriptor file...')
+    generated = dt.datetime.now(dt.timezone.utc)
     metadata = dict(
         project=codons.project.tag,
         version=version,
+        revision=scm_info.revision,
+        branch=scm_info.branch,
+        tag=scm_info.tag,
+        distance=scm_info.distance,
+        changes=scm_info.changes,
+        dirty=scm_info.dirty,
+        generated=generated,
     )
+    metadata = {k: fmt_python(v) for k, v in metadata.items()}
     if codons.meta.format not in META_SPEC:
         return None, 'Unsupported meta descriptor format: {}'.format(codons.meta.format)
     filename, template = META_SPEC[codons.meta.format]
@@ -334,6 +355,8 @@ def publish_release(codons, release_name, force=False):
             targetdir, filename = os.path.split(targetpath)
             if not os.path.isdir(targetdir):
                 os.makedirs(targetdir)
+            if os.path.isdir(localpath):
+                continue
             shutil.copy(localpath, targetdir)
 
     @unwrap_or_panic
@@ -890,7 +913,7 @@ def version_update():
     log.info('Got version: %s', version)
     if not codons.meta:
         return None, 'No meta descriptor settings defined'
-    filename = write_meta(codons, version)
+    filename = write_meta(codons, version, scm_info)
     log.info('Meta descriptor updated: %s', filename)
     return None, None
 
@@ -906,9 +929,9 @@ def release(settings):
     scm_info = scm_describe()
     version = derive_version_string(scm_info)
     log.info('Got version: %s', version)
-    check_scm_status_for_release(scm_info)
+    # check_scm_status_for_release(scm_info)
     if codons.meta:
-        filename = write_meta(codons, version)
+        filename = write_meta(codons, version, scm_info)
         log.info('Meta descriptor updated: %s', filename)
     if codons.codestyle:
         commands = codons.codestyle.get('commands', [])
