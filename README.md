@@ -22,7 +22,7 @@ with the help of Ribosome and a bit of discipline.
 
 ## Download
 
-Ribosome is available on Pypi:
+Ribosome is available on PyPI:
 [https://pypi.org/project/ribosome.tool/](https://pypi.org/project/ribosome.tool/)
 
 
