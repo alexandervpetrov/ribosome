@@ -1,7 +1,7 @@
 # Ribosome
 
 The purpose of this tool is to improve release culture for small projects,
-to provide useful *conventions* and suitable *vocabulary* for speaking about
+to provide useful **conventions** and suitable **vocabulary** for speaking about
 software pieces, and to simplify making and deploying simple services.
 
 Ribosome imposes some reasonable concepts and assumptions that, I believe,
@@ -14,7 +14,7 @@ with version. Then you build it, run tests against it, and archive all needed fi
 as the release (release archive). You upload the archive to some persistent
 storage for further use. The next step is to deploy the release to some working
 place and run by loading one or more services with appropriate configurations
-attached. Notice, it is essential to support the clear separation between release,
+attached. Notice, it is *essential* to support the clear separation between release,
 deploy and run stages. Also, valuable properties are reproducibility and
 idempotence of steps. In a nutshell, exactly process described can be achieved
 with the help of Ribosome and a bit of discipline.
