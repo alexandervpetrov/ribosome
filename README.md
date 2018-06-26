@@ -19,6 +19,8 @@ deploy and run stages. Also, valuable properties are reproducibility and
 idempotence of steps. In a nutshell, exactly process described can be achieved
 with the help of Ribosome and a bit of discipline.
 
+## Typical workflow
+
 For a start, in the root of your project's folder, the file `codons.yaml`
 should be placed - this is where various settings for Ribosome live.
 You can generate an empty one by the command: `ribosome init`.
