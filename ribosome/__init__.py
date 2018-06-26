@@ -1099,11 +1099,12 @@ def unload(settings, password, version, service, config, host):
 @click.argument('service')
 @click.argument('config')
 @click.argument('action')
+@click.argument('args', nargs=-1)
 @click.argument('host')
 @click.pass_obj
 @process_errors
 @unwrap_or_panic
-def run(settings, version, service, config, action, host):
+def run(settings, version, service, config, action, args, host):
     """Run action for service with chosen configuration.
 
     \b
@@ -1115,6 +1116,8 @@ def run(settings, version, service, config, action, host):
         host: destination host alias (usage of ssh config assumed)
     """
     welcome()
+    log.debug('host: %s', host)
+    log.debug('action: %s, args: %s', action, args)
     log.error('Not implemented')
     return None, None
 
