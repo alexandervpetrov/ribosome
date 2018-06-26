@@ -135,7 +135,7 @@ def scm_describe(root='.'):
     info, error = scminfo.describe(root)
     if error is not None:
         return None, error
-    log.debug('Got SCM info: %s', info)
+    log.info('Got SCM info: %s', info)
     return as_object(info), None
 
 
@@ -898,7 +898,7 @@ def version_info():
     welcome()
     scm_info = scm_describe()
     version = derive_version_string(scm_info)
-    log.info('Got version: %s', version)
+    log.info('Version derived: %s', version)
     return None, None
 
 
@@ -911,7 +911,7 @@ def version_update():
     codons = read_project_codons()
     scm_info = scm_describe()
     version = derive_version_string(scm_info)
-    log.info('Got version: %s', version)
+    log.info('Version derived: %s', version)
     if not codons.meta:
         return None, 'No meta descriptor settings defined'
     filename = write_meta(codons, version, scm_info)
@@ -929,7 +929,7 @@ def release(settings):
     codons = read_project_codons()
     scm_info = scm_describe()
     version = derive_version_string(scm_info)
-    log.info('Got version: %s', version)
+    log.info('Version derived: %s', version)
     # check_scm_status_for_release(scm_info)
     if codons.meta:
         filename = write_meta(codons, version, scm_info)
