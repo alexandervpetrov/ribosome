@@ -27,6 +27,6 @@ Ribosome releases project versions, i.e., named tags of source code repository.
 Tag expected to be in one of the forms: N.N.N, N.N.NaN, N.N.NbN and devxxxx -
 where "N" is for a number and "xxxx" for any alphanumerical suffix.
 
-At any time you can find out what version you project folder is: `ribosome version info`.
+At any time you can find out what version your project folder is: `ribosome version info`.
 
 After you tagged repository with a version, you can make a release: `ribosome release`.
