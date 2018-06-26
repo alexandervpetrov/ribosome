@@ -26,8 +26,8 @@ should be placed - this is where various settings for Ribosome live.
 You can generate an empty one by the command: `ribosome init`.
 
 Ribosome releases project versions, i.e., named tags of source code repository.
-Tag expected to be in one of the forms: N.N.N, N.N.NaN, N.N.NbN and devxxxx -
-where "N" is for a number and "xxxx" for any alphanumerical suffix.
+Tag expected to be in one of the forms: `N.N.N`, `N.N.NaN`, `N.N.NbN` and `devxxxx` -
+where `N` is for a number and `xxxx` for any alphanumerical suffix.
 
 At any time you can find out what version your project folder is: `ribosome version info`.
 
