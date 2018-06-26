@@ -20,10 +20,14 @@ idempotence of steps. In a nutshell, exactly process described can be achieved
 with the help of Ribosome and a bit of discipline.
 
 
-## Download
+## Installation
 
 Ribosome is available on PyPI:
 [https://pypi.org/project/ribosome.tool/](https://pypi.org/project/ribosome.tool/)
+
+To install use [pipenv](pipenv.org) (or pip, of course):
+
+    $ pipenv install ribosome.tool
 
 
 ## Typical workflow
@@ -32,7 +36,7 @@ For a start, in the root of your project's folder, the file `codons.yaml`
 should be placed - this is where various settings for Ribosome live.
 You can generate an empty one by the command:
 
-    ribosome init
+    $ ribosome init
 
 Ribosome releases project versions, i.e., named tags of source code repository.
 Tag expected to be in one of the forms: `N.N.N`, `N.N.NaN`, `N.N.NbN` and `devxxxx` -
@@ -40,8 +44,8 @@ where `N` is for a number and `xxxx` for any alphanumerical suffix.
 
 At any time you can find out what version your project folder is:
 
-    ribosome version info
+    $ ribosome version info
 
 After you tagged repository with a version, you can make a release:
 
-    ribosome release
+    $ ribosome release
