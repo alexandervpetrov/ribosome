@@ -38,8 +38,8 @@ You can generate an empty one by the command:
 
     $ ribosome init
 
-At this point configure your project for Ribosome via `codons.yaml` -
-I will describe how to do this later.
+Suppose you have already configured your project for Ribosome via `codons.yaml` -
+I will describe later how to do this.
 
 Ribosome releases project versions, i.e., named tags of source code repository.
 Tag expected to be in one of the forms: `N.N.N`, `N.N.NaN`, `N.N.NbN` and `devxxxx` -
