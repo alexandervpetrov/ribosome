@@ -158,6 +158,8 @@ def check_for_valid_version(s):
 @unwrap_or_panic
 def derive_version_string(scm_info):
     tag = scm_info.tag
+    if not tag:
+        return None, 'SCM tag is undefined'
     if not is_valid_version(tag):
         return None, 'Invalid SCM tag: {}'.format(tag)
     vs = tag
@@ -894,7 +896,6 @@ def version():
 def version_info():
     """Show project version information"""
     welcome()
-    codons = read_project_codons()
     scm_info = scm_describe()
     version = derive_version_string(scm_info)
     log.info('Got version: %s', version)
