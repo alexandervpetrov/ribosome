@@ -19,6 +19,13 @@ deploy and run stages. Also, valuable properties are reproducibility and
 idempotence of steps. In a nutshell, exactly process described can be achieved
 with the help of Ribosome and a bit of discipline.
 
+
+## Download
+
+Ribosome is available on Pypi:
+[https://pypi.org/project/ribosome.tool/](https://pypi.org/project/ribosome.tool/)
+
+
 ## Typical workflow
 
 For a start, in the root of your project's folder, the file `codons.yaml`
