@@ -25,7 +25,7 @@ with the help of Ribosome and a bit of discipline.
 Ribosome is available on PyPI:
 [https://pypi.org/project/ribosome.tool/](https://pypi.org/project/ribosome.tool/)
 
-To install use [pipenv](pipenv.org) (or pip, of course):
+To install use [pipenv](http://pipenv.org) (or pip, of course):
 
     $ pipenv install ribosome.tool
 
