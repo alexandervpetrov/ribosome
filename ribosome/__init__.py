@@ -347,7 +347,15 @@ def publish_release(codons, release_name, force=False):
         files_to_include = []
         if codons.release.include:
             for pattern in codons.release.include:
-                files_to_include.extend(glob.glob(pattern, recursive=True))
+                len_before = len(files_to_include)
+                for path in glob.glob(pattern, recursive=True):
+                    if os.path.exists(path):
+                        files_to_include.append(path)
+                    else:
+                        log.warn('Path not exists: %s', path)
+                len_after = len(files_to_include)
+                if len_before == len_after:
+                    log.warn('No files found by pattern: %s', pattern)
         return files_to_include
 
     def copyfiles(paths, targetroot):
