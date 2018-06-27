@@ -12,6 +12,7 @@ import shutil
 import tempfile
 import pathlib
 import io
+import time
 
 import click
 import coloredlogs
@@ -273,10 +274,16 @@ def run_job(args, env=None):
 
 @unwrap_or_panic
 def check_scm_status_for_release(scm_info):
+    clean = True
     if scm_info.dirty:
-        return None, 'Working directory has uncommitted changes, cannot release'
+        log.warn('Working directory has uncommitted changes. Think what you\'re doing!')
+        clean = False
     if scm_info.distance is not None:
-        return None, 'Found {} commit(s) after tag. Only clean SCM tag allowed for release'.format(scm_info.distance)
+        log.warn('Working directory not tagged. Found %d commit(s) after last tag. Think what you\'re doing!', scm_info.distance)
+        clean = False
+    if not clean:
+        TIME_TO_THINK = 5  # seconds
+        time.sleep(TIME_TO_THINK)
     return None, None
 
 
@@ -938,7 +945,7 @@ def release(settings):
     scm_info = scm_describe()
     version = derive_version_string(scm_info)
     log.info('Version derived: %s', version)
-    # check_scm_status_for_release(scm_info)
+    check_scm_status_for_release(scm_info)
     if codons.meta:
         filename = write_meta(codons, version, scm_info)
         log.info('Meta descriptor updated: %s', filename)
