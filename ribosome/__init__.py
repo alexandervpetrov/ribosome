@@ -274,15 +274,16 @@ def run_job(args, env=None):
 
 @unwrap_or_panic
 def check_scm_status_for_release(scm_info):
-    clean = True
+    warnings = []
     if scm_info.dirty:
-        log.warn('Working directory has uncommitted changes. Think what you\'re doing!')
-        clean = False
+        warnings.append('Working directory has uncommitted changes')
     if scm_info.distance is not None:
-        log.warn('Working directory not tagged. Found %d commit(s) after last tag. Think what you\'re doing!', scm_info.distance)
-        clean = False
-    if not clean:
-        TIME_TO_THINK = 5  # seconds
+        warnings.append('Working directory not tagged: found {} commit(s) after last tag'.format(scm_info.distance))
+    if warnings:
+        for w in warnings:
+            log.warn(w)
+        log.warn('Think what you\'re doing!')
+        TIME_TO_THINK = 7  # seconds
         time.sleep(TIME_TO_THINK)
     return None, None
 
