@@ -277,8 +277,8 @@ def check_scm_status_for_release(scm_info):
     warnings = []
     if scm_info.dirty:
         warnings.append('Working directory has uncommitted changes')
-    if scm_info.distance is not None:
-        warnings.append('Working directory not tagged: found {} commit(s) after last tag'.format(scm_info.distance))
+    if scm_info.changes > 0:
+        warnings.append('Working directory not tagged: found {} change(s) after last tag'.format(scm_info.changes))
     if warnings:
         for w in warnings:
             log.warn(w)
