@@ -1111,6 +1111,25 @@ def unload(settings, password, version, service, config, host):
     return None, None
 
 
+@cli.command(short_help='Load all services for version at remote host')
+@click.argument('version')
+@click.argument('host')
+@click.pass_obj
+@process_errors
+@unwrap_or_panic
+def jump(settings, version, host):
+    """Reload all already running services for specific project version at remote host.
+
+    \b
+    Args:
+        version: project version to use
+        host: destination host alias (usage of ssh config assumed)
+    """
+    welcome()
+    log.error('Not implemented')
+    return None, None
+
+
 @cli.command(short_help='Run command for service at remote host')
 @click.argument('version')
 @click.argument('service')
@@ -1121,7 +1140,7 @@ def unload(settings, password, version, service, config, host):
 @click.pass_obj
 @process_errors
 @unwrap_or_panic
-def run(settings, version, service, config, action, args, host):
+def do(settings, version, service, config, action, args, host):
     """Run action for service with chosen configuration.
 
     \b
@@ -1130,6 +1149,7 @@ def run(settings, version, service, config, action, args, host):
         service: service name
         config: configuration name
         action: action to run
+        [args]: action command line arguments
         host: destination host alias (usage of ssh config assumed)
     """
     welcome()
