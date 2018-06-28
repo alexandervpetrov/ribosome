@@ -873,7 +873,7 @@ CLICK_CONTEXT_SETTINGS = dict(
 @click.version_option(prog_name='Ribosome', version=__version__)
 @click.pass_context
 def cli(ctx, verbose, force):
-    """Yet another project deploy and release tool"""
+    """Project deploy and release tool for humans"""
     settings = {
         'force': force,
     }
