@@ -136,7 +136,6 @@ def scm_describe(root='.'):
     info, error = scminfo.describe(root)
     if error is not None:
         return None, error
-    log.info('Got SCM info: %s', info)
     return as_object(info), None
 
 
@@ -913,6 +912,7 @@ def version_info():
     """Show project version information"""
     welcome()
     scm_info = scm_describe()
+    log.info('Got SCM info: %s', scm_info)
     version = derive_version_string(scm_info)
     log.info('Version derived: %s', version)
     return None, None
