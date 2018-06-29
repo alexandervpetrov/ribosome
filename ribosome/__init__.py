@@ -578,10 +578,12 @@ def setup_runtime_environment(host, release_name, commands):
     project_tag, version = split_release_name(release_name)
     remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
     with fapi.cd(str(remote_release_root)):
+        remote_run('pwd')
         for command in commands:
             result = remote_run(command)
             if result.failed:
                 return None, 'Failed to setup runtime environment by: {}'.format(command)
+        remote_run('pipenv --py')
     return None, None
 
 
@@ -1111,22 +1113,42 @@ def unload(settings, password, version, service, config, host):
     return None, None
 
 
-@cli.command(short_help='Load all services for version at remote host')
+@cli.command(short_help='Reload all services to version at remote host')
+@click.option('--password', prompt='[sudo] password for remote host', hide_input=True)
 @click.argument('version')
 @click.argument('host')
 @click.pass_obj
 @process_errors
 @unwrap_or_panic
-def jump(settings, version, host):
-    """Reload all already running services for specific project version at remote host.
+def jump(settings, password, version, host):
+    """Reload all already loaded services to specific project version at remote host.
 
     \b
     Args:
         version: project version to use
         host: destination host alias (usage of ssh config assumed)
     """
+    setup_global_remote_sudo_password(password)
     welcome()
-    log.error('Not implemented')
+    local_codons = read_project_codons()
+
+    project_tag = local_codons.project.tag
+    release_name = derive_release_name(project_tag, version)
+
+    service_indices = execute_as_remote_task(get_services_index, host, project_tag)
+    project_service_index = service_indices.get(project_tag, {}) if service_indices is not None else {}
+
+    if not project_service_index:
+        log.info('No loaded services found at host [%s]. Nothing to do', host)
+
+    for service, loaded_info in project_service_index.items():
+        for config, old_version_loaded in loaded_info.items():
+            old_service_release_name = derive_release_name(project_tag, old_version_loaded)
+            execute_as_remote_task(unload_service, host, project_tag, old_service_release_name, service, config)
+            log.info('Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, old_service_release_name, host)
+            execute_as_remote_task(load_service, host, project_tag, release_name, service, config)
+            log.info('Service [%s] configuration [%s] from release [%s] loaded at host [%s]', service, config, release_name, host)
+
     return None, None
 
 
