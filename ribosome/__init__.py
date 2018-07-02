@@ -723,14 +723,13 @@ def get_remote_codons(host, project_tag, release_name):
 
 @fapi.task
 @unwrap_or_panic
-def run_service_commands(host, project_tag, release_name, service, config, commands, sudo=False):
+def run_service_commands(host, project_tag, release_name, commands, sudo=False):
     if not commands:
         return None, None
     runner = remote_sudo if sudo else remote_run
     remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
     with fapi.cd(str(remote_release_root)):
         for command in commands:
-            command = command.format(service=service, config=config)
             result = runner(command)
             if result.failed:
                 return None, 'Failed to run service command: {}'.format(command)
@@ -743,9 +742,10 @@ def load_service(host, project_tag, release_name, service, config):
     log.debug('Loading service...')
     codons = get_remote_codons(host, project_tag, release_name)
     if not codons.service or not codons.service.load:
-        return None, 'Service load commands not found'
+        return None, 'Service [load] commands not found'
     load_commands = codons.service.load.get('commands', [])
-    run_service_commands(host, project_tag, release_name, service, config, load_commands, sudo=True)
+    load_commands = [cmd.format(service=service, config=config) for cmd in load_commands]
+    run_service_commands(host, project_tag, release_name, load_commands, sudo=True)
     update_services_index(host, release_name, service, config, include=True)
     return None, None
 
@@ -756,10 +756,25 @@ def unload_service(host, project_tag, release_name, service, config):
     log.debug('Unloading service...')
     codons = get_remote_codons(host, project_tag, release_name)
     if not codons.service or not codons.service.unload:
-        return None, 'Service unload commands not found'
+        return None, 'Service [unload] commands not found'
     unload_commands = codons.service.unload.get('commands', [])
-    run_service_commands(host, project_tag, release_name, service, config, unload_commands, sudo=True)
+    unload_commands = [cmd.format(service=service, config=config) for cmd in unload_commands]
+    run_service_commands(host, project_tag, release_name, unload_commands, sudo=True)
     update_services_index(host, release_name, service, config, include=False)
+    return None, None
+
+
+@fapi.task
+@unwrap_or_panic
+def run_service_action(host, project_tag, release_name, service, config, action, args):
+    log.debug('Running service action...')
+    codons = get_remote_codons(host, project_tag, release_name)
+    if not codons.service or not codons.service.do:
+        return None, 'Service [do] commands not found'
+    do_commands = codons.service.do.get('commands', [])
+    args_str = ' '.join(args)
+    do_commands = [cmd.format(service=service, config=config, action=action, args=args_str) for cmd in do_commands]
+    run_service_commands(host, project_tag, release_name, do_commands)
     return None, None
 
 
@@ -928,6 +943,7 @@ def version_update():
     welcome()
     codons = read_project_codons()
     scm_info = scm_describe()
+    log.info('Got SCM info: %s', scm_info)
     version = derive_version_string(scm_info)
     log.info('Version derived: %s', version)
     if not codons.meta:
@@ -946,6 +962,7 @@ def release(settings):
     welcome()
     codons = read_project_codons()
     scm_info = scm_describe()
+    log.info('Got SCM info: %s', scm_info)
     version = derive_version_string(scm_info)
     log.info('Version derived: %s', version)
     check_scm_status_for_release(scm_info)
@@ -1175,9 +1192,15 @@ def do(settings, version, service, config, action, args, host):
         host: destination host alias (usage of ssh config assumed)
     """
     welcome()
-    log.debug('host: %s', host)
-    log.debug('action: %s, args: %s', action, args)
-    log.error('Not implemented')
+    local_codons = read_project_codons()
+
+    project_tag = local_codons.project.tag
+    release_name = derive_release_name(project_tag, version)
+
+    execute_as_remote_task(run_service_action, host, project_tag, release_name, service, config, action, args)
+
+    log.info('Service [%s] configuration [%s] action [%s] from release [%s] successfully completed at host [%s]', service, config, action, release_name, host)
+
     return None, None
 
 
