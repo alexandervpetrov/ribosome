@@ -66,7 +66,7 @@ project:
   tag: {project_tag}
 
 meta:
-  # format: python
+  format: python
 
 codestyle:
   commands:
@@ -82,7 +82,7 @@ test:
 
 release:
   include:
-    # - meta.py
+    - meta.py
   publish:
     # s3bucket: <bucket-name>
     # localdir: ..
