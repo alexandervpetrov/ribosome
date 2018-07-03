@@ -91,16 +91,19 @@ setup:
   commands:
     # - make setup
 
-# [service] and [config] variables will be formatted into command string
-# will run with sudo
 service:
   load:
+    # will run with sudo
     commands:
-      # - pipenv run ./service.py install {{service}} {{config}}
-      # - pipenv run ./service.py start {{service}} {{config}}
+      # - $(pipenv --py) ./service.py install {{service}} {{config}}
+      # - $(pipenv --py) ./service.py start {{service}} {{config}}
   unload:
+    # will run with sudo
     commands:
-      # - pipenv run ./service.py uninstall {{service}} {{config}}
+      # - $(pipenv --py) ./service.py uninstall {{service}} {{config}}
+  do:
+    commands:
+      # - $(pipenv --py) ./service.py do {service} {config} {action} {args}
 
 services:
   # <service_name>:
