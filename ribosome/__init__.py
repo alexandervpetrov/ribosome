@@ -581,12 +581,10 @@ def setup_runtime_environment(host, release_name, commands):
     project_tag, version = split_release_name(release_name)
     remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
     with fapi.cd(str(remote_release_root)):
-        remote_run('pwd')
         for command in commands:
             result = remote_run(command)
             if result.failed:
                 return None, 'Failed to setup runtime environment by: {}'.format(command)
-        remote_run('pipenv --py')
     return None, None
 
 
