@@ -53,8 +53,7 @@ After you tagged repository with a version, you can make a release:
 
     $ ribosome release
 
-During this process release archive is made and uploaded to
-[Amazon S3](https://en.wikipedia.org/wiki/Amazon_S3) bucket.
+During this process release archive is made and uploaded to Amazon S3 bucket.
 Credentials for S3 access expected to be
 [already configured](https://boto3.readthedocs.io/en/latest/guide/quickstart.html#configuration)
 in the environment.
@@ -63,7 +62,7 @@ Any uploaded to S3 release can be deployed to remote host accessible via SSH:
 
     $ ribosome deploy <version> <host>
 
-At remote host `~/releases` folder is used for archives storage and
+At remote host `~/releases` folder is used for archives upload and
 `~/projects` is used for release deployment and management.
 During deploy process runtime environment will be set up.
 
