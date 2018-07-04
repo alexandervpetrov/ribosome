@@ -16,7 +16,7 @@ def run(args, cwd=None, errormsg=None, check=True):
     job_env = os.environ.copy()
     job_env.update(no_i18n_env)
 
-    TIMEOUT = 3  # seconds
+    TIMEOUT = 10  # seconds
 
     try:
         job = subprocess.run(
