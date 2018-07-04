@@ -13,13 +13,13 @@ def detect(rootpath):
     return scmdir.exists() and scmdir.is_dir()
 
 
-def is_hg_command_avaliable(rootpath):
+def is_hg_command_available(rootpath):
     __, error = utils.run('hg help'.split(), cwd=rootpath)
     return error is None
 
 
 def describe(rootpath):
-    if not is_hg_command_avaliable(rootpath):
+    if not is_hg_command_available(rootpath):
         return None, 'Command [hg] is not available'
 
     description, error = identify_repo(rootpath)
@@ -65,7 +65,7 @@ def describe(rootpath):
 
 
 def archive(rootpath, targetdir):
-    if not is_hg_command_avaliable(rootpath):
+    if not is_hg_command_available(rootpath):
         return None, 'Command [hg] is not available'
 
     log.debug('Making archive of repo [%s] to [%s]...', rootpath, targetdir)

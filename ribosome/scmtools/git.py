@@ -14,13 +14,13 @@ def detect(rootpath):
     return scmdir.exists() and scmdir.is_dir()
 
 
-def is_git_command_avaliable(rootpath):
+def is_git_command_available(rootpath):
     __, error = utils.run('git help'.split(), cwd=rootpath)
     return error is None
 
 
 def describe(rootpath):
-    if not is_git_command_avaliable(rootpath):
+    if not is_git_command_available(rootpath):
         return None, 'Command [git] is not available'
 
     output, error = utils.run(
@@ -78,7 +78,7 @@ def describe(rootpath):
 
 
 def archive(rootpath, targetdir):
-    if not is_git_command_avaliable(rootpath):
+    if not is_git_command_available(rootpath):
         return None, 'Command [git] is not available'
 
     log.debug('Making archive of repo [%s] to [%s]...', rootpath, targetdir)
