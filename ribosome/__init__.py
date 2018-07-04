@@ -305,24 +305,9 @@ def run_commands(job_name, commands):
 @unwrap_or_panic
 def make_scm_archive(target_dir):
     current_dir = pathlib.Path.cwd()
-    if current_dir.joinpath('.hg').exists():
-        args = ['hg', 'archive', target_dir]
-        returncode = run_job(args)
-        if returncode != 0:
-            return None, 'Making SCM archive failed'
-    elif current_dir.joinpath('.git').exists():
-        with tempfile.TemporaryDirectory() as tempdir:
-            archive = os.path.join(tempdir, 'archive.tar')
-            args = ['git', 'archive', '--format=tar', '--output={}'.format(archive), 'HEAD']
-            returncode = run_job(args)
-            if returncode != 0:
-                return None, 'Making SCM archive failed'
-            args = ['tar', '--extract', '--file={}'.format(archive), '--directory={}'.format(target_dir)]
-            returncode = run_job(args)
-            if returncode != 0:
-                return None, 'Making SCM archive failed'
-    else:
-        return None, 'No .git or .hg repository found'
+    __, error = scminfo.archive(current_dir, target_dir)
+    if error is not None:
+        return None, error
     return None, None
 
 

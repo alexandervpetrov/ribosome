@@ -1,7 +1,11 @@
 
+import logging
 import pathlib
+import tempfile
 
 from ribosome.scminfo import utils
+
+log = logging.getLogger(__name__)
 
 
 def detect(rootpath):
@@ -10,9 +14,13 @@ def detect(rootpath):
     return scmdir.exists() and scmdir.is_dir()
 
 
-def describe(rootpath):
+def is_git_command_avaliable(rootpath):
     __, error = utils.run('git help'.split(), cwd=rootpath)
-    if error is not None:
+    return error is None
+
+
+def describe(rootpath):
+    if not is_git_command_avaliable(rootpath):
         return None, 'Command [git] is not available'
 
     output, error = utils.run(
@@ -67,6 +75,33 @@ def describe(rootpath):
         dirty=dirty,
     )
     return scminfo, None
+
+
+def archive(rootpath, targetdir):
+    if not is_git_command_avaliable(rootpath):
+        return None, 'Command [git] is not available'
+
+    log.debug('Making archive of repo [%s] to [%s]...', rootpath, targetdir)
+    with tempfile.TemporaryDirectory() as tempdir:
+        archive = pathlib.Path(tempdir).joinpath('archive.tar')
+
+        __, error = utils.run(
+            ['git', 'archive', '--format=tar', '--output={}'.format(archive), 'HEAD'],
+            cwd=rootpath,
+            errormsg='Failed to make repository archive',
+        )
+        if error is not None:
+            return None, error
+
+        __, error = utils.run(
+            ['tar', '--extract', '--file={}'.format(archive), '--directory={}'.format(targetdir)],
+            cwd=rootpath,
+            errormsg='Failed to extract repository archive to target directory',
+        )
+        if error is not None:
+            return None, error
+
+    return None, None
 
 
 def get_branch(rootpath):

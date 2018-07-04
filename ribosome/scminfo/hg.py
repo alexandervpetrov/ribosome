@@ -1,7 +1,10 @@
 
+import logging
 import pathlib
 
 from ribosome.scminfo import utils
+
+log = logging.getLogger(__name__)
 
 
 def detect(rootpath):
@@ -10,9 +13,13 @@ def detect(rootpath):
     return scmdir.exists() and scmdir.is_dir()
 
 
-def describe(rootpath):
+def is_hg_command_avaliable(rootpath):
     __, error = utils.run('hg help'.split(), cwd=rootpath)
-    if error is not None:
+    return error is None
+
+
+def describe(rootpath):
+    if not is_hg_command_avaliable(rootpath):
         return None, 'Command [hg] is not available'
 
     description, error = identify_repo(rootpath)
@@ -55,6 +62,22 @@ def describe(rootpath):
         dirty=dirty,
     )
     return scminfo, None
+
+
+def archive(rootpath, targetdir):
+    if not is_hg_command_avaliable(rootpath):
+        return None, 'Command [hg] is not available'
+
+    log.debug('Making archive of repo [%s] to [%s]...', rootpath, targetdir)
+    __, error = utils.run(
+        ['hg', 'archive', targetdir],
+        cwd=rootpath,
+        errormsg='Failed to make repository archive',
+    )
+    if error is not None:
+        return None, error
+
+    return None, None
 
 
 def identify_repo(rootpath):
