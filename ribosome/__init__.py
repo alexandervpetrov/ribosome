@@ -22,7 +22,7 @@ import botocore
 import fabric
 import fabric.api as fapi
 
-from ribosome import scminfo
+from ribosome import scmtools
 
 # TODO: move from [fabric] to [paramiko]
 
@@ -136,7 +136,7 @@ def get_codons():
 def scm_describe(root='.'):
     log.debug('Getting SCM repository info...')
     # TODO: get outgoing changes status info
-    info, error = scminfo.describe(root)
+    info, error = scmtools.describe(root)
     if error is not None:
         return None, error
     return as_object(info), None
@@ -305,7 +305,7 @@ def run_commands(job_name, commands):
 @unwrap_or_panic
 def make_scm_archive(target_dir):
     current_dir = pathlib.Path.cwd()
-    __, error = scminfo.archive(current_dir, target_dir)
+    __, error = scmtools.archive(current_dir, target_dir)
     if error is not None:
         return None, error
     return None, None

@@ -2,9 +2,9 @@
 import logging
 import pathlib
 
-from ribosome.scminfo import utils
+from . import utils
 
-log = logging.getLogger(__name__)
+log = logging.getLogger('scmtools')
 
 
 def detect(rootpath):

@@ -2,8 +2,8 @@
 
 import pathlib
 
-from ribosome.scminfo import git
-from ribosome.scminfo import hg
+from . import git
+from . import hg
 
 
 HANDLERS = (git, hg)
