@@ -4,7 +4,7 @@ import pathlib
 
 from . import utils
 
-log = logging.getLogger('scmtools')
+log = logging.getLogger('scmtools.hg')
 
 
 def detect(rootpath):
@@ -106,7 +106,8 @@ def identify_repo(rootpath):
 def find_latest_version_tag(rootpath):
     """Gets all tags containing a '.' from oldest to newest"""
     output, error = utils.run(
-        ["hg", "log", "-r", r"ancestors(.) and tag('re:\.')", "--template", "{tags}\n"],
+        # ["hg", "log", "-r", r"ancestors(.) and tag('re:\.')", "--template", "{tags}\n"],  # only tags with dots inside allowed
+        ["hg", "log", "-r", r"ancestors(.) and tag('re:')", "--template", "{tags}\n"],  # any tags allowed
         cwd=rootpath,
         errormsg='Failed to find latest tag',
     )
@@ -115,6 +116,8 @@ def find_latest_version_tag(rootpath):
     if not output:
         return None, None
     tags = output.split()
+    if tags[-1] == 'tip':
+        tags = tags[:-1]
     latest_tag = tags[-1].split()[-1]
     return latest_tag, None
 

@@ -5,7 +5,7 @@ import tempfile
 
 from . import utils
 
-log = logging.getLogger('scmtools')
+log = logging.getLogger('scmtools.git')
 
 
 def detect(rootpath):
@@ -130,7 +130,8 @@ def get_revision(rootpath):
 
 def get_latest_tag_description(rootpath):
     output, error = utils.run(
-        'git describe --dirty --tags --long --match *.*'.split(),
+        # 'git describe --dirty --tags --long --match *.*'.split(),  # only tags with dots inside allowed
+        'git describe --dirty --tags --long --match *'.split(),  # any tags allowed
         cwd=rootpath,
         errormsg='Failed to describe repository',
     )

@@ -1,11 +1,16 @@
 
+import logging
 import os
 import subprocess
+
+log = logging.getLogger('scmtools.utils')
 
 
 def run(args, cwd=None, errormsg=None, check=True):
 
     cmd = args[0]
+
+    log.debug('run: %s', args)
 
     no_i18n_env = dict(
         LC_ALL="C",
