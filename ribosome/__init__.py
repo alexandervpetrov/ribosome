@@ -13,6 +13,7 @@ import tempfile
 import pathlib
 import io
 import time
+import importlib
 
 import click
 import coloredlogs
@@ -64,6 +65,8 @@ def unwrap_or_panic(f):
 CODONS_TEMPLATE = """
 project:
   tag: {project_tag}
+
+tag_policy: ribosome.default_tag_policy
 
 meta:
   format: python
@@ -117,7 +120,6 @@ def get_clean_codons(project_tag):
     return CODONS_TEMPLATE.format(project_tag=project_tag)
 
 
-@unwrap_or_panic
 def get_codons():
     log.debug('Reading codons...')
     yaml = ryaml.YAML()
@@ -142,20 +144,44 @@ def scm_describe(root='.'):
     return as_object(info), None
 
 
-# SCM tag is expected to be special case of PEP-440 version scheme.
+# Release version scheme - special case of PEP-440.
 # Forms allowed: N.N.N, N.N.NaN, N.N.NbN, N.N.NrcN
-SCM_TAG_PATTERN = re.compile(r'^\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?$')
+RELEASE_TAG_PATTERN = re.compile(r'^\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?$')
+
+# Development version scheme.
+# Forms allowed: devXXXX, where `XXXX` - any non-empty alphanumerical suffix
+DEVELOPMENT_TAG_PATTERN = re.compile(r'^dev\.[a-zA-Z0-9.]+$')
 
 
-def is_valid_version(s):
-    return re.match(SCM_TAG_PATTERN, s) is not None
+def default_tag_policy(tag):
+    if not tag:
+        return False
+    is_release = re.match(RELEASE_TAG_PATTERN, tag) is not None
+    is_development = re.match(DEVELOPMENT_TAG_PATTERN, tag) is not None
+    is_allowed_for_release = is_release or is_development
+    return is_allowed_for_release
 
 
-@unwrap_or_panic
-def check_for_valid_version(s):
-    if not is_valid_version(s):
-        return None, 'Invalid version string: {}'.format(s)
-    return None, None
+def any_tag_policy(tag):
+    if not tag:
+        return False
+    return True
+
+
+def load_tag_policy(tag_policy_descriptor):
+    if not tag_policy_descriptor or '.' not in tag_policy_descriptor:
+        return None, 'Invalid tag policy descriptor: {}'.format(tag_policy_descriptor)
+    module_s, function_s = tag_policy_descriptor.rsplit('.', 1)
+    if not module_s or not function_s:
+        return None, 'Invalid tag policy descriptor: {}'.format(tag_policy_descriptor)
+    try:
+        module = importlib.import_module(module_s)
+    except Exception as e:
+        return None, 'Failed to load tag policy descriptor: {}'.format(e)
+    tag_policy = getattr(module, function_s, None)
+    if tag_policy is None or not callable(tag_policy):
+        return None, 'Invalid tag policy descriptor: {}'.format(tag_policy_descriptor)
+    return tag_policy, None
 
 
 @unwrap_or_panic
@@ -163,8 +189,6 @@ def derive_version_string(scm_info):
     tag = scm_info.tag
     if not tag:
         return None, 'SCM tag is undefined'
-    if not is_valid_version(tag):
-        return None, 'Invalid SCM tag: {}'.format(tag)
     vs = tag
     if scm_info.changes > 0:
         vs += '.post{}'.format(scm_info.distance)
@@ -841,10 +865,13 @@ def welcome():
     log.info('Ribosome {}. Let\'s make a bit of proteins...'.format(__version__))
 
 
+@unwrap_or_panic
 def read_project_codons():
-    codons = get_codons()
+    codons, error = get_codons()
+    if error is not None:
+        return None, error
     log.info('Found project: %s', codons.project.tag)
-    return codons
+    return codons, None
 
 
 def process_errors(f):
@@ -914,10 +941,23 @@ def version():
 def version_info():
     """Show project version information"""
     welcome()
+    codons_loaded = False
+    codons, error = get_codons()
+    if error is None:
+        codons_loaded = True
+        log.info('Found project: %s', codons.project.tag)
     scm_info = scm_describe()
     log.info('Got SCM info: %s', scm_info)
     version = derive_version_string(scm_info)
     log.info('Version derived: %s', version)
+    if codons_loaded:
+        tag_policy, error = load_tag_policy(codons.tag_policy)
+        if error is not None:
+            log.error(error)
+        else:
+            is_allowed_for_release = tag_policy(scm_info.tag)
+            if not is_allowed_for_release:
+                log.warn('Tag is not allowed for release: %s', scm_info.tag)
     return None, None
 
 
@@ -930,6 +970,12 @@ def version_update():
     codons = read_project_codons()
     scm_info = scm_describe()
     log.info('Got SCM info: %s', scm_info)
+    tag_policy, error = load_tag_policy(codons.tag_policy)
+    if error is not None:
+        return None, error
+    is_allowed_for_release = tag_policy(scm_info.tag)
+    if not is_allowed_for_release:
+        return None, 'Tag is not allowed for release: {}'.format(scm_info.tag)
     version = derive_version_string(scm_info)
     log.info('Version derived: %s', version)
     if not codons.meta:
@@ -951,6 +997,12 @@ def release(settings):
     log.info('Got SCM info: %s', scm_info)
     version = derive_version_string(scm_info)
     log.info('Version derived: %s', version)
+    tag_policy, error = load_tag_policy(codons.tag_policy)
+    if error is not None:
+        return None, error
+    is_allowed_for_release = tag_policy(scm_info.tag)
+    if not is_allowed_for_release:
+        return None, 'Tag is not allowed for release: {}'.format(scm_info.tag)
     check_scm_status_for_release(scm_info)
     if codons.meta:
         filename = write_meta(codons, version, scm_info)
@@ -990,8 +1042,6 @@ def deploy(settings, version, host):
     """
     welcome()
     codons = read_project_codons()
-
-    check_for_valid_version(version)
 
     if not codons.release or not codons.release.publish or not codons.release.publish.s3bucket:
         return None, 'Codons for Amazon S3 not found. Don\'t know how to get artifact for deploying'
