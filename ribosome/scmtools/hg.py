@@ -106,8 +106,8 @@ def identify_repo(rootpath):
 def find_latest_version_tag(rootpath):
     """Gets all tags containing a '.' from oldest to newest"""
     output, error = utils.run(
-        # ["hg", "log", "-r", r"ancestors(.) and tag('re:\.')", "--template", "{tags}\n"],  # only tags with dots inside allowed
-        ["hg", "log", "-r", r"ancestors(.) and tag('re:')", "--template", "{tags}\n"],  # any tags allowed
+        # ["hg", "log", "-r", r"ancestors(.) and tag('re:\.')", "--template", r"{tags}\n"],  # only tags with dots inside allowed
+        ["hg", "log", "-r", r"ancestors(.) and tag('re:')", "--template", r"{tags}\n"],  # any tags allowed
         cwd=rootpath,
         errormsg='Failed to find latest tag',
     )
@@ -148,7 +148,7 @@ def changes_since_tag(rootpath, tag):
         r" and not tag({tag!r}))"  # ignore the tagged commit itself
     ).format(tag=tag)
     output, error = utils.run(
-        ["hg", "log", "-r", revset, "--template", "{node|short}\n"],
+        ["hg", "log", "-r", revset, "--template", r"{node|short}\n"],
         cwd=rootpath,
         errormsg='Failed to detect changes since tag',
     )

@@ -5,12 +5,27 @@ import subprocess
 
 log = logging.getLogger('scmtools.utils')
 
+# https://unix.stackexchange.com/a/270979
+# https://www.gnu.org/software/bash/manual/bashref.html#Escape-Character
+BASH_ESCAPE_SYMBOLS = r"`~!#$&*(){[|\;'<>? "
+
 
 def run(args, cwd=None, errormsg=None, check=True):
 
     cmd = args[0]
 
-    log.debug('run: %s', args)
+    def format_command_token(s):
+        for symbol in BASH_ESCAPE_SYMBOLS:
+            if symbol in s:
+                return '"{}"'.format(s)
+        if '"' in s:
+            return "'{}'".format(s)
+        return s
+
+    def guess_command_line(args):
+        return ' '.join(map(format_command_token, args))
+
+    log.debug('run: %s', guess_command_line(args))
 
     no_i18n_env = dict(
         LC_ALL="C",
