@@ -118,6 +118,8 @@ def find_latest_version_tag(rootpath):
     tags = output.split()
     if tags[-1] == 'tip':
         tags = tags[:-1]
+    if not tags:
+        return None, None
     latest_tag = tags[-1].split()[-1]
     return latest_tag, None
 
