@@ -308,7 +308,7 @@ def check_scm_status_for_release(scm_info):
     if warnings:
         for w in warnings:
             log.warn(w)
-        log.warn('Think what you\'re doing!')
+        log.warn('Think what you\'re doing! You can press Ctrl+C to stop')
         TIME_TO_THINK = 7  # seconds
         time.sleep(TIME_TO_THINK)
     return None, None
