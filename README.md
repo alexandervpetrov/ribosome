@@ -5,9 +5,9 @@ to provide useful **conventions** and suitable **vocabulary** for speaking about
 software pieces, and to simplify making and deploying simple services.
 
 Ribosome imposes some reasonable concepts and assumptions that, I believe,
-can clarify release process and be helpful for a wide range of projects.
+can clarify the release process and be helpful for a wide range of projects.
 
-Let's begin with the description of what I consider proper release process.
+Let's begin with the description of what I consider the proper release process.
 You have a project - some version controlled thing, a source code repository
 for example. At some point in time, you decide to fix it state by tagging
 with version. Then you build it, run tests against it, and archive all needed files
@@ -65,6 +65,34 @@ Any uploaded to S3 release can be deployed to remote host accessible via SSH:
 At remote host `~/releases` folder is used for archives upload and
 `~/projects` is used for release deployment and management.
 During deploy process runtime environment will be set up.
+After that release files and runtime are considered immutable.
 
 This and any other Ribosome operations using SSH (the ones that taking `host` parameter)
 require that you configure host settings and alias inside `~/.ssh/config`.
+
+For deployed release you can load and unload service(s):
+
+    $ ribosome load <version> <service> <config> <host>
+
+In case of a simple upgrade, when all services of interest at host are already running,
+you can quickly reload them all of them (jump) to the new version:
+
+    $ ribosome jump <version> <host>
+
+Load, unload and jump commands require entering sudo password for the remote host.
+
+When (un)loading services Ribosome save their status in files
+`~/projects/<project>/services.index.yaml` so you can easily view
+the state of the remote host for current project via command:
+
+    $ ribosome show <host>
+
+Alternatively, adding an option `-a` will scan for services of all projects
+deployed at host:
+
+    $ ribosome show <host> -a
+
+
+## Project configuration
+
+*TODO: Create examples for web projects (aiohttp, Django, Nginx, ...).*
