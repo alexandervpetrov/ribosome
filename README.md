@@ -123,4 +123,17 @@ deployed at host:
 
 ## Project configuration
 
-*TODO: Create examples for web projects (aiohttp, Django, Nginx, ...).*
+Technically, Ribosome is just simple commands and remote commands runner
+with few features for SCM management.
+It does not do anything special or complex in terms of functionality.
+What it does do - is the separation of concerns and operations specifications
+to enforce and support the release process with reproducibility and immutability in mind.
+
+Ribosome on its own does not know how to *release* projects or *load* services.
+It provides only the **structure** for these operations.
+
+So, to configure a project for Ribosome via the file `codons.yaml` -
+you need to provide commands that implement your project's release process
+under Ribosome structure.
+
+*TODO: Make public examples for web projects (aiohttp, Django, Nginx, ...).*
