@@ -20,7 +20,7 @@ idempotence of steps. In a nutshell, exactly process described can be achieved
 with the help of Ribosome and a bit of discipline.
 
 
-## Installation
+## Getting started
 
 Ribosome is available on PyPI:
 [https://pypi.org/project/ribosome.tool/](https://pypi.org/project/ribosome.tool/)
@@ -28,6 +28,34 @@ Ribosome is available on PyPI:
 To install use [pipenv](http://pipenv.org) (or pip, of course):
 
     $ pipenv install ribosome.tool
+
+Read help:
+
+    $ ribosome --help
+    Usage: ribosome [OPTIONS] COMMAND [ARGS]...
+
+      Project deploy and release tool for humans
+
+    Options:
+      -v, --verbose  More detailed logging to console
+      -f, --force    Rewrite existing files
+      --version      Show the version and exit.
+      --help         Show this message and exit.
+
+    Commands:
+      deploy   Deploy release artifacts to host
+      do       Run command for service at remote host
+      init     Initialize Ribosome project
+      jump     Reload all services to version at remote host
+      load     Load service at remote host
+      release  Make release and publish artifacts
+      show     Show loaded services at remote host
+      unload   Unload service at remote host
+      version  Show version or update meta descriptor
+
+And help for specific command:
+
+    $ ribosome <command> --help
 
 
 ## Typical workflow
