@@ -34,7 +34,7 @@ Read help:
     $ ribosome --help
     Usage: ribosome [OPTIONS] COMMAND [ARGS]...
 
-      Project deploy and release tool for humans
+      Yet another project deploy and release tool
 
     Options:
       -v, --verbose  More detailed logging to console
