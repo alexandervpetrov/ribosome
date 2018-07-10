@@ -70,8 +70,8 @@ Suppose you have already configured your project for Ribosome via `codons.yaml` 
 I will describe later how to do this.
 
 Ribosome releases project versions, i.e., named tags of source code repository.
-Tag expected to be in one of the forms: `N.N.N`, `N.N.NaN`, `N.N.NbN` and `devxxxx` -
-where `N` is for a number and `xxxx` for any alphanumerical suffix.
+Tag expected to be in one of the forms: `N.N.N`, `N.N.NaN`, `N.N.NbN` and `dev.XXXX` -
+where `N` is for a number and `XXXX` for any alphanumerical suffix with dots inside allowed.
 
 At any time you can find out what version your project folder is:
 
