@@ -1255,13 +1255,13 @@ def show(settings, search_all_projects, host):
     """
     welcome()
 
-    log.info('Inspecting services at host [%s]...', host)
-
     if search_all_projects:
         project_tag = None
+        log.info('Inspecting services at host [%s]...', host)
     else:
         codons = read_project_codons()
         project_tag = codons.project.tag
+        log.info('Inspecting services of project [%s] at host [%s]...', project_tag, host)
 
     service_indices = execute_as_remote_task(get_services_index, host, project_tag)
 
