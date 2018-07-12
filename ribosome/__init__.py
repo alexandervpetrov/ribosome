@@ -1289,6 +1289,47 @@ def show(settings, search_all_projects, host):
     return None, None
 
 
+@cli.command(short_help='List deployed versions at remote host')
+@click.option('-a', '--all', 'search_all_projects', is_flag=True, help='Search through all projects')
+@click.argument('host')
+@click.pass_obj
+@process_errors
+@unwrap_or_panic
+def ls(settings, search_all_projects, host):
+    """List deployed versions at remote host.
+
+    \b
+    Args:
+        host: destination host alias (usage of ssh config assumed)
+    """
+    welcome()
+
+    log.error('Not implemented')
+
+    return None, None
+
+
+@cli.command(short_help='Uninstall deployed versions at remote host')
+@click.argument('versions', nargs=-1)
+@click.argument('host')
+@click.pass_obj
+@process_errors
+@unwrap_or_panic
+def gc(settings, versions, host):
+    """Uninstall deployed versions at remote host.
+
+    \b
+    Args:
+        [versions]: version masks to uninstall
+        host: destination host alias (usage of ssh config assumed)
+    """
+    welcome()
+
+    log.error('Not implemented')
+
+    return None, None
+
+
 fabric_global_patch()
 logging_global_patch()
 
