@@ -23,7 +23,7 @@ def run(args, cwd=None, errormsg=None, check=True):
         return s
 
     def guess_command_line(args):
-        return ' '.join(map(format_command_token, args))
+        return ' '.join(format_command_token(str(arg)) for arg in args)
 
     log.debug('run: %s', guess_command_line(args))
 
