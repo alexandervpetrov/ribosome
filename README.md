@@ -137,3 +137,9 @@ you need to provide commands that implement your project's release process
 under Ribosome structure.
 
 *TODO: Make public examples for web projects (aiohttp, Django, Nginx, ...).*
+
+
+## TODO
+
+- [ ] Implement [ls] and [gc] commands
+- [ ] Rewrite remote commands implementation with [asyncssh](https://github.com/ronf/asyncssh)
