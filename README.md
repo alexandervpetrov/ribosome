@@ -136,7 +136,10 @@ So, to configure a project for Ribosome via the file `codons.yaml` -
 you need to provide commands that implement your project's release process
 under Ribosome structure.
 
-*TODO: Make public examples for web projects (aiohttp, Django, Nginx, ...).*
+Please, see examples for
+[Nginx configuration files](https://github.com/alexandervpetrov/ribosome-example-ngninx)
+and
+[Django project](https://github.com/alexandervpetrov/ribosome-example-django).
 
 
 ## TODO
