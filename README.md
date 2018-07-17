@@ -137,7 +137,7 @@ you need to provide commands that implement your project's release process
 under Ribosome structure.
 
 Please, see examples for
-[Nginx configuration files](https://github.com/alexandervpetrov/ribosome-example-ngninx)
+[Nginx configuration files](https://github.com/alexandervpetrov/ribosome-example-nginx)
 and
 [Django project](https://github.com/alexandervpetrov/ribosome-example-django).
 
