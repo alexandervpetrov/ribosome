@@ -146,3 +146,12 @@ and
 
 - [ ] Implement [ls] and [gc] commands
 - [ ] Rewrite remote commands implementation with [asyncssh](https://github.com/ronf/asyncssh)
+
+
+## Acknowledgments
+
+This project is created with the support of [Orderry](https://orderry.com/) company,
+my thanks for the opportunities and understanding.
+
+For the idea of the name `Ribosome`, my gratitude goes to
+[Ievgeniia Prekrasna](https://www.facebook.com/preckrasna).
