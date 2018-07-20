@@ -9,7 +9,7 @@ can clarify the release process and be helpful for a wide range of projects.
 
 Let's begin with the description of what I consider the proper release process.
 You have a project - some version controlled thing, a source code repository
-for example. At some point in time, you decide to fix it state by tagging
+for example. At some point in time, you decide to freeze its state by tagging
 with version. Then you build it, run tests against it, and archive all needed files
 as the release (release archive). You upload the archive to some persistent
 storage for further use. The next step is to deploy the release to some working
@@ -95,15 +95,15 @@ At remote host `~/releases` folder is used for archives upload and
 During deploy process runtime environment will be set up.
 After that release files and runtime are considered immutable.
 
-This and any other Ribosome operations using SSH (the ones that taking `host` parameter)
-require that you configure host settings and alias inside `~/.ssh/config`.
+This and any other Ribosome operations using SSH (the ones taking `host` parameter)
+require you to configure host settings and alias inside `~/.ssh/config`.
 
 For deployed release you can load and unload service(s):
 
     $ ribosome load <version> <service> <config> <host>
 
-In case of a simple upgrade, when all services of interest at host are already running,
-you can quickly reload them all of them (jump) to the new version:
+In case of a simple upgrade, when all services of interest are already running at host,
+you can quickly reload all of them (jump) to the new version:
 
     $ ribosome jump <version> <host>
 
@@ -130,11 +130,11 @@ What it does do - is the separation of concerns and operations specifications
 to enforce and support the release process with reproducibility and immutability in mind.
 
 Ribosome on its own does not know how to *release* projects or *load* services.
-It provides only the **structure** for these operations.
+It provides only the **structure** or **interface** for these operations.
 
 So, to configure a project for Ribosome via the file `codons.yaml` -
-you need to provide commands that implement your project's release process
-under Ribosome structure.
+you need to provide build, setup and other commands - your project's release process
+implementation of Ribosome interface.
 
 Please, see examples for
 [Nginx configuration files](https://github.com/alexandervpetrov/ribosome-example-nginx)
