@@ -142,12 +142,6 @@ and
 [Django project](https://github.com/alexandervpetrov/ribosome-example-django).
 
 
-## TODO
-
-- [ ] Implement [ls] and [gc] commands
-- [ ] Rewrite remote commands implementation with [asyncssh](https://github.com/ronf/asyncssh)
-
-
 ## Acknowledgments
 
 This project is created with the support of [Orderry](https://orderry.com/) company,
