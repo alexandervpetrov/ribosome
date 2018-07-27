@@ -2,7 +2,7 @@
 # Ribosome release history
 
 
-## next
+## 0.2.0 / 2018-07-27
 
 Incompatible changes:
 * No [changes] parameter is returned with scminfo and placed inside meta.py file
