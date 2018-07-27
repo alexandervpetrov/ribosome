@@ -188,7 +188,7 @@ def derive_version_string(scm_info):
     if not tag:
         return None, 'SCM tag is undefined'
     vs = tag
-    if scm_info.changes > 0:
+    if scm_info.distance > 0:
         vs += '.post{}'.format(scm_info.distance)
         if scm_info.revision:
             vs += '+{}'.format(scm_info.revision)
@@ -207,7 +207,6 @@ revision = {revision}
 branch = {branch}
 tag = {tag}
 distance = {distance}
-changes = {changes}
 dirty = {dirty}
 
 generated = {generated}
@@ -238,7 +237,6 @@ def write_meta(codons, version, scm_info):
         branch=scm_info.branch,
         tag=scm_info.tag,
         distance=scm_info.distance,
-        changes=scm_info.changes,
         dirty=scm_info.dirty,
         generated=generated,
     )
@@ -301,8 +299,8 @@ def check_scm_status_for_release(scm_info):
     warnings = []
     if scm_info.dirty:
         warnings.append('Working directory has uncommitted changes')
-    if scm_info.changes > 0:
-        warnings.append('Working directory not tagged: found {} change(s) after last tag'.format(scm_info.changes))
+    if scm_info.distance > 0:
+        warnings.append('Working directory not tagged: found {} commit(s) after last tag'.format(scm_info.distance))
     if warnings:
         for w in warnings:
             log.warn(w)

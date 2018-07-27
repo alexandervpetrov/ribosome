@@ -29,7 +29,6 @@ def describe(rootpath):
     branch, revision, tags, dirty = description
 
     distance = 0
-    changes = 0
 
     if tags:
         # clean tag found
@@ -46,11 +45,8 @@ def describe(rootpath):
         if error is not None:
             return None, error
         if version_tag is not None:
-            changes, error = changes_since_tag(rootpath, version_tag)
-            if error is not None:
-                return None, error
-
-    assert changes <= distance, "Unexpected changes / distance meaning"
+            # not counting separate Mercurial commit for tag
+            distance -= 1
 
     scminfo = dict(
         scm='hg',
@@ -58,7 +54,6 @@ def describe(rootpath):
         branch=branch,
         tag=version_tag,
         distance=distance,
-        changes=changes,
         dirty=dirty,
     )
     return scminfo, None
@@ -140,7 +135,7 @@ def graph_distance(rootpath, rev1, rev2="."):
     return distance, None
 
 
-def changes_since_tag(rootpath, tag):
+def changes_inside_branch_since_tag(rootpath, tag):
     assert tag
     revset = (
         r"(branch(.)"  # look for revisions in this branch only

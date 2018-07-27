@@ -61,17 +61,12 @@ def describe(rootpath):
         if error is not None:
             return None, error
 
-    changes = distance
-
-    # not checking against version tag format
-
     scminfo = dict(
         scm='git',
         revision=revision,
         branch=branch,
         tag=latest_tag,
         distance=distance,
-        changes=changes,
         dirty=dirty,
     )
     return scminfo, None
