@@ -14,6 +14,7 @@ import pathlib
 import io
 import time
 import importlib
+import collections
 
 import click
 import coloredlogs
@@ -1303,6 +1304,28 @@ def ls(settings, search_all_projects, host):
         host: destination host alias (usage of ssh config assumed)
     """
     welcome()
+
+    if search_all_projects:
+        project_tag = None
+        log.info('Looking for deployed versions at host [%s]...', host)
+    else:
+        codons = read_project_codons()
+        project_tag = codons.project.tag
+        log.info('Looking for deployed versions of project [%s] at host [%s]...', project_tag, host)
+
+    service_indices = execute_as_remote_task(get_services_index, host, project_tag)
+    if service_indices is None:
+        service_indices = {}
+
+    project_versions_with_services_loaded = collections.defaultdict(set)
+    for ptag, services_index in service_indices.items():
+        if services_index:
+            for service, configs in services_index.items():
+                for config, version in configs.items()
+                    project_versions_with_services_loaded[ptag].add(version)
+
+    for ptag, versions in project_versions_with_services_loaded.items():
+        log.info('%s: %s', ptag, versions)
 
     log.error('Not implemented')
 
