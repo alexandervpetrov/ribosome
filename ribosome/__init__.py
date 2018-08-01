@@ -1344,10 +1344,9 @@ def ls(settings, search_all_projects, host):
 
     project_versions_with_services_loaded = collections.defaultdict(set)
     for ptag, services_index in service_indices.items():
-        if services_index:
-            for service, configs in services_index.items():
-                for config, version in configs.items():
-                    project_versions_with_services_loaded[ptag].add(version)
+        for service, configs in services_index.items():
+            for config, version in configs.items():
+                project_versions_with_services_loaded[ptag].add(version)
 
     versions_deployed = execute_as_remote_task(get_remote_versions_deployed, host, project_tag)
 
