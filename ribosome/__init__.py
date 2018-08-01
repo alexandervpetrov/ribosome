@@ -653,7 +653,7 @@ def update_services_index(host, release_name, service, config, include=None):
 
 def remote_list_subdirs(host, dirpath):
     # expand user directory [~]
-    r = remote_run('echo {}'.format(PROJECTS_REMOTE_ROOT))
+    r = remote_run('echo {}'.format(dirpath))
     projects_abspath = pathlib.PurePosixPath(str(r))
     sftp = fabric.sftp.SFTP(host)
     r = sftp.ftp.listdir(str(projects_abspath))
@@ -666,8 +666,10 @@ def remote_list_subdirs(host, dirpath):
 def get_services_index(host, project_tag):
 
     if project_tag:
+        log.debug('Fetching service index for project [%s] at host [%s]...', project_tag, host)
         project_tags = [project_tag]
     else:
+        log.debug('Fetching service indices for all projects at host [%s]...', host)
         project_tags = remote_list_subdirs(host, PROJECTS_REMOTE_ROOT)
 
     service_indices = {}
@@ -726,6 +728,31 @@ def get_remote_codons(host, project_tag, release_name):
             return None, 'Codons corrupted for release [{}] at host [{}]: {}'.format(release_name, host, e)
         else:
             return as_object(codons), None
+
+
+@fapi.task
+@unwrap_or_panic
+def get_remote_versions_deployed(host, project_tag):
+
+    if project_tag:
+        log.debug('Fetching deployed versions list for project [%s] at host [%s]...', project_tag, host)
+        project_tags = [project_tag]
+    else:
+        log.debug('Fetching deployed versions list for all projects at host [%s]...', host)
+        project_tags = remote_list_subdirs(host, PROJECTS_REMOTE_ROOT)
+
+    versions_deployed = collections.defaultdict(set)
+
+    for ptag in project_tags:
+        remote_project_root = PROJECTS_REMOTE_ROOT.joinpath(ptag)
+        subdirs = remote_list_subdirs(host, remote_project_root)
+        release_prefix = ptag + '-'
+        for name in subdirs:
+            if name.startswith(release_prefix):
+                version = name[len(release_prefix):]
+                versions_deployed[ptag].add(version)
+
+    return versions_deployed, None
 
 
 @fapi.task
@@ -1317,13 +1344,22 @@ def ls(settings, search_all_projects, host):
     for ptag, services_index in service_indices.items():
         if services_index:
             for service, configs in services_index.items():
-                for config, version in configs.items()
+                for config, version in configs.items():
                     project_versions_with_services_loaded[ptag].add(version)
 
-    for ptag, versions in project_versions_with_services_loaded.items():
-        log.info('%s: %s', ptag, versions)
+    versions_deployed = execute_as_remote_task(get_remote_versions_deployed, host, project_tag)
 
-    log.error('Not implemented')
+    projects = sorted(list(versions_deployed.keys()))
+    for ptag in projects:
+        versions = versions_deployed[ptag]
+        versions_sorted = sorted(list(versions))
+        log.info('[%s]:', ptag)
+        versions_loaded = project_versions_with_services_loaded[ptag]
+        for v in versions_sorted:
+            if v in versions_loaded:
+                log.info('    %s - [loaded]', v)
+            else:
+                log.info('    %s', v)
 
     return None, None
 
