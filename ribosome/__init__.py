@@ -1296,7 +1296,9 @@ def show(settings, search_all_projects, host):
             log.info('No services index for project [%s] found', project_tag)
     else:
         if service_indices:
-            for ptag, services_index in service_indices.items():
+            projects = sorted(list(service_indices.keys()))
+            for ptag in projects:
+                services_index = service_indices[ptag]
                 if services_index:
                     log.info('Project [%s]: services loaded:', ptag)
                     index = []
