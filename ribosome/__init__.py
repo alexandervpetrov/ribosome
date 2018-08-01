@@ -1300,7 +1300,7 @@ def show(settings, search_all_projects, host):
             for ptag in projects:
                 services_index = service_indices[ptag]
                 if services_index:
-                    log.info('Project [%s]: services loaded:', ptag)
+                    log.info('[%s]: services loaded:', ptag)
                     index = []
                     for service, configs in services_index.items():
                         index.extend((service, config, version) for config, version in configs.items())
@@ -1308,7 +1308,7 @@ def show(settings, search_all_projects, host):
                     for service, config, version in index:
                         log.info('    %s/%s: %s', service, config, version)
                 else:
-                    log.info('Project [%s]: no loaded services found', ptag)
+                    log.info('[%s]: no loaded services found', ptag)
         else:
             log.info('No loaded services found')
 
@@ -1354,14 +1354,17 @@ def ls(settings, search_all_projects, host):
     projects = sorted(list(versions_deployed.keys()))
     for ptag in projects:
         versions = versions_deployed[ptag]
-        versions_sorted = sorted(list(versions))
-        log.info('[%s]:', ptag)
-        versions_loaded = project_versions_with_services_loaded[ptag]
-        for v in versions_sorted:
-            if v in versions_loaded:
-                log.info('    %s - [loaded]', v)
-            else:
-                log.info('    %s', v)
+        if versions:
+            versions_sorted = sorted(list(versions))
+            log.info('[%s]: deployed versions:', ptag)
+            versions_loaded = project_versions_with_services_loaded[ptag]
+            for v in versions_sorted:
+                if v in versions_loaded:
+                    log.info('    %s - [loaded]', v)
+                else:
+                    log.info('    %s', v)
+        else:
+            log.info('[%s]: no deployed versions found', ptag)
 
     return None, None
 
