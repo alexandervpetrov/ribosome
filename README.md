@@ -45,9 +45,11 @@ Read help:
     Commands:
       deploy   Deploy release artifacts to host
       do       Run command for service at remote host
+      gc       Uninstall deployed versions at remote host
       init     Initialize Ribosome project
       jump     Reload all services to version at remote host
       load     Load service at remote host
+      ls       List deployed versions at remote host
       release  Make release and publish artifacts
       show     Show loaded services at remote host
       unload   Unload service at remote host
@@ -119,6 +121,20 @@ Alternatively, adding an option `-a` will scan for services of all projects
 deployed at host:
 
     $ ribosome show <host> -a
+
+At any time you can list deployed versions for current project with:
+
+    $ ribosome ls <host>
+
+or get a list for all projects with `-a` option.
+
+Deployed versions can be removed from remote host with:
+
+    $ ribosome gc <versions> <host>
+
+where first argument is versions pattern - symbols `*` and `?` are recognized.
+Versions with services currently loaded cannot be removed by this command,
+you should unload all services from version to be able to remove it.
 
 
 ## Project configuration
