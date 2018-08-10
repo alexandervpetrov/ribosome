@@ -835,6 +835,52 @@ def find_service_configs(codons, services_pattern, configs_pattern):
     return matches
 
 
+def match_versions(versions, versions_pattern):
+
+    def derive_regexp(pattern):
+        prefix = r''
+        suffix = r''
+        if pattern.startswith(r'*'):
+            prefix = r'\S+'
+            pattern = pattern[1:]
+        regexp = r'^' + prefix + pattern.replace(r'*', r'\S*') + suffix + r'$'
+        return re.compile(regexp)
+
+    versions_regexps = [derive_regexp(pattern) for pattern in versions_pattern.split(',')]
+
+    matches = []
+    for version in versions:
+        if any(pattern.match(version) for pattern in versions_regexps):
+            matches.append(version)
+    return matches
+
+
+@fapi.task
+@unwrap_or_panic
+def remove_release(host, project_tag, release_name):
+    log.debug('Removing release [%s]...', release_name)
+    codons = get_remote_codons(host, project_tag, release_name)
+
+    remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
+
+    if codons.cleanup:
+        cleanup_commands = codons.cleanup.get('commands', [])
+        if cleanup_commands:
+            log.debug('Runtime environment cleanup...')
+            with fapi.cd(str(remote_release_root)):
+                for command in cleanup_commands:
+                    result = remote_sudo(command)
+                    if result.failed:
+                        log.warn('Failed to cleanup runtime environment by: {}'.format(command))
+
+    log.debug('Removing release directory...')
+    result = remote_sudo('rm -rf {}'.format(remote_release_root))
+    if result.failed:
+        return None, 'Failed to remove release directory'
+
+    return None, None
+
+
 def execute_as_remote_task(operation, host, *args, **kwargs):
     result = fapi.execute(functools.partial(operation, host, *args, **kwargs), hosts=[host])
     return result[host]
@@ -1370,22 +1416,61 @@ def ls(settings, search_all_projects, host):
 
 
 @cli.command(short_help='Uninstall deployed versions at remote host')
-@click.argument('versions', nargs=-1)
+@click.option('--password', prompt='[sudo] password for remote host', hide_input=True)
+@click.argument('versions')
 @click.argument('host')
 @click.pass_obj
 @process_errors
 @unwrap_or_panic
-def gc(settings, versions, host):
+def gc(settings, password, versions, host):
     """Uninstall deployed versions at remote host.
 
     \b
     Args:
-        [versions]: version masks to uninstall
+        versions: versions mask to uninstall
         host: destination host alias (usage of ssh config assumed)
     """
+    setup_global_remote_sudo_password(password)
     welcome()
 
-    log.error('Not implemented')
+    codons = read_project_codons()
+    project_tag = codons.project.tag
+    log.info('Looking for deployed and loaded versions of project [%s] at host [%s]...', project_tag, host)
+
+    service_indices = execute_as_remote_task(get_services_index, host, project_tag)
+    project_service_index = service_indices.get(project_tag, {}) if service_indices is not None else {}
+
+    versions_loaded = set()
+    for service, configs in project_service_index.items():
+        for config, version in configs.items():
+            versions_loaded.add(version)
+
+    all_versions_deployed = execute_as_remote_task(get_remote_versions_deployed, host, project_tag)
+    versions_deployed = all_versions_deployed.get(project_tag, set())
+
+    versions_pattern = versions
+    versions_matched = match_versions(versions_deployed, versions_pattern)
+    versions_matched = sorted(list(versions_matched))
+
+    log.info('Versions pattern: %s', versions)
+    log.info('Versions matched: %s', ', '.join(versions_matched))
+
+    versions_removed = []
+    versions_skipped = []
+
+    for version in versions_matched:
+        if version in versions_loaded:
+            versions_skipped.append(version)
+            log.info('Skipped: %s (currently loaded)', version)
+            continue
+        log.debug('Removing: %s', version)
+        release_name = derive_release_name(project_tag, version)
+        execute_as_remote_task(remove_release, host, project_tag, release_name)
+        versions_removed.append(version)
+        log.info('Removed: %s', version)
+
+    log.info('Versions skipped: %s', ', '.join(versions_skipped))
+    log.info('Versions removed: %s', ', '.join(versions_removed))
 
     return None, None
 
