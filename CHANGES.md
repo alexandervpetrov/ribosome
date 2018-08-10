@@ -3,6 +3,8 @@
 
 ## Next
 
+* Fix: codons reading was broken with new version of ruamel.yaml
+
 
 ## 0.3.1 / 2018-08-10
 
