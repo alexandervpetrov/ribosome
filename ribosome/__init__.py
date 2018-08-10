@@ -26,7 +26,7 @@ import fabric.api as fapi
 
 from ribosome import scmtools
 
-__version__ = '0.3.0-snapshot'
+__version__ = '0.3.1'
 
 log = logging.getLogger('ribosome')
 

@@ -3,6 +3,9 @@
 
 ## Next
 
+
+## 0.3.1 / 2018-08-10
+
 * Fix: cleanup command in codons template
 
 
