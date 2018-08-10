@@ -40,9 +40,9 @@ def as_object(obj):
             # but almost surely is a bad design decision
             return self.get(name)
 
-    if isinstance(obj, dict):
+    if isinstance(obj, collections.abc.Mapping):
         return DictProxy({k: as_object(v) for k, v in obj.items()})
-    elif isinstance(obj, (list, tuple)):
+    elif isinstance(obj, collections.abc.Sequence) and not isinstance(obj, (str, bytes, bytearray)):
         return [as_object(item) for item in obj]
     else:
         return obj
