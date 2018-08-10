@@ -93,6 +93,11 @@ setup:
   commands:
     # - make setup
 
+cleanup:
+  # will run with sudo
+  commands:
+    # - rm -rf $(pipenv --venv)
+
 service:
   load:
     # will run with sudo
