@@ -14,6 +14,7 @@ import pathlib
 import io
 import time
 import importlib
+import collections
 
 import click
 import coloredlogs
@@ -303,8 +304,8 @@ def check_scm_status_for_release(scm_info):
         warnings.append('Working directory not tagged: found {} commit(s) after last tag'.format(scm_info.distance))
     if warnings:
         for w in warnings:
-            log.warn(w)
-        log.warn('Think what you\'re doing! You can press Ctrl+C to stop')
+            log.warning(w)
+        log.warning('Think what you\'re doing! You can press Ctrl+C to stop')
         TIME_TO_THINK = 7  # seconds
         time.sleep(TIME_TO_THINK)
     return None, None
@@ -367,10 +368,10 @@ def publish_release(codons, release_name, force=False):
                     if os.path.exists(path):
                         files_to_include.append(path)
                     else:
-                        log.warn('Path not exists: %s', path)
+                        log.warning('Path not exists: %s', path)
                 len_after = len(files_to_include)
                 if len_before == len_after:
-                    log.warn('No files found by pattern: %s', pattern)
+                    log.warning('No files found by pattern: %s', pattern)
         return files_to_include
 
     def copyfiles(paths, targetroot):
@@ -554,7 +555,7 @@ def upload_release(host, release_name, s3bucket, force=False):
     if not force and release_archive_exists:
         # TODO: file checksum compare
         log.info('Release [%s] already found uploaded at remote host [%s]: %s', release_name, host, remote_release_archive_path)
-        log.warn('No checksum checking was done - trusting the remote file blindly')
+        log.warning('No checksum checking was done - trusting the remote file blindly')
     else:
         with tempfile.TemporaryDirectory() as tempdir:
             local_release_archive_path = os.path.join(tempdir, release_archive_name)
@@ -621,8 +622,8 @@ def update_services_index(host, release_name, service, config, include=None):
             try:
                 service_index = yaml.load(stream)['services']
             except Exception as e:
-                log.warn('Service index corrupted: %s', e)
-                log.warn('Creating new blank service index')
+                log.warning('Service index corrupted: %s', e)
+                log.warning('Creating new blank service index')
                 service_index = {}
 
     if service not in service_index:
@@ -652,7 +653,7 @@ def update_services_index(host, release_name, service, config, include=None):
 
 def remote_list_subdirs(host, dirpath):
     # expand user directory [~]
-    r = remote_run('echo {}'.format(PROJECTS_REMOTE_ROOT))
+    r = remote_run('echo {}'.format(dirpath))
     projects_abspath = pathlib.PurePosixPath(str(r))
     sftp = fabric.sftp.SFTP(host)
     r = sftp.ftp.listdir(str(projects_abspath))
@@ -665,8 +666,10 @@ def remote_list_subdirs(host, dirpath):
 def get_services_index(host, project_tag):
 
     if project_tag:
+        log.debug('Fetching service index for project [%s] at host [%s]...', project_tag, host)
         project_tags = [project_tag]
     else:
+        log.debug('Fetching service indices for all projects at host [%s]...', host)
         project_tags = remote_list_subdirs(host, PROJECTS_REMOTE_ROOT)
 
     service_indices = {}
@@ -725,6 +728,31 @@ def get_remote_codons(host, project_tag, release_name):
             return None, 'Codons corrupted for release [{}] at host [{}]: {}'.format(release_name, host, e)
         else:
             return as_object(codons), None
+
+
+@fapi.task
+@unwrap_or_panic
+def get_remote_versions_deployed(host, project_tag):
+
+    if project_tag:
+        log.debug('Fetching deployed versions list for project [%s] at host [%s]...', project_tag, host)
+        project_tags = [project_tag]
+    else:
+        log.debug('Fetching deployed versions list for all projects at host [%s]...', host)
+        project_tags = remote_list_subdirs(host, PROJECTS_REMOTE_ROOT)
+
+    versions_deployed = collections.defaultdict(set)
+
+    for ptag in project_tags:
+        remote_project_root = PROJECTS_REMOTE_ROOT.joinpath(ptag)
+        subdirs = remote_list_subdirs(host, remote_project_root)
+        release_prefix = ptag + '-'
+        for name in subdirs:
+            if name.startswith(release_prefix):
+                version = name[len(release_prefix):]
+                versions_deployed[ptag].add(version)
+
+    return versions_deployed, None
 
 
 @fapi.task
@@ -805,6 +833,52 @@ def find_service_configs(codons, services_pattern, configs_pattern):
                 if any(pattern.match(config) for pattern in configs_regexps):
                     matches.append((service, config))
     return matches
+
+
+def match_versions(versions, versions_pattern):
+
+    def derive_regexp(pattern):
+        prefix = r''
+        suffix = r''
+        if pattern.startswith(r'*'):
+            prefix = r'\S+'
+            pattern = pattern[1:]
+        regexp = r'^' + prefix + pattern.replace(r'*', r'\S*') + suffix + r'$'
+        return re.compile(regexp)
+
+    versions_regexps = [derive_regexp(pattern) for pattern in versions_pattern.split(',')]
+
+    matches = []
+    for version in versions:
+        if any(pattern.match(version) for pattern in versions_regexps):
+            matches.append(version)
+    return matches
+
+
+@fapi.task
+@unwrap_or_panic
+def remove_release(host, project_tag, release_name):
+    log.debug('Removing release [%s]...', release_name)
+    codons = get_remote_codons(host, project_tag, release_name)
+
+    remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
+
+    if codons.cleanup:
+        cleanup_commands = codons.cleanup.get('commands', [])
+        if cleanup_commands:
+            log.debug('Runtime environment cleanup...')
+            with fapi.cd(str(remote_release_root)):
+                for command in cleanup_commands:
+                    result = remote_sudo(command)
+                    if result.failed:
+                        log.warning('Failed to cleanup runtime environment by: {}'.format(command))
+
+    log.debug('Removing release directory...')
+    result = remote_sudo('rm -rf {}'.format(remote_release_root))
+    if result.failed:
+        return None, 'Failed to remove release directory'
+
+    return None, None
 
 
 def execute_as_remote_task(operation, host, *args, **kwargs):
@@ -953,7 +1027,7 @@ def version_info():
         else:
             is_allowed_for_release = tag_policy(scm_info.tag)
             if not is_allowed_for_release:
-                log.warn('Tag is not allowed for release: %s', scm_info.tag)
+                log.warning('Tag is not allowed for release: %s', scm_info.tag)
     return None, None
 
 
@@ -1154,7 +1228,7 @@ def unload(settings, password, version, service, config, host):
         if service in project_service_index and config in project_service_index[service]:
             version_loaded = project_service_index[service][config]
             if version != version_loaded:
-                log.warn('Skipping unload service [%s] config [%s]: version loaded [%s] does not match requested [%s]', service, config, version_loaded, version)
+                log.warning('Skipping unload service [%s] config [%s]: version loaded [%s] does not match requested [%s]', service, config, version_loaded, version)
                 continue
         execute_as_remote_task(unload_service, host, project_tag, release_name, service, config)
         log.info('Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, release_name, host)
@@ -1268,9 +1342,11 @@ def show(settings, search_all_projects, host):
             log.info('No services index for project [%s] found', project_tag)
     else:
         if service_indices:
-            for ptag, services_index in service_indices.items():
+            projects = sorted(list(service_indices.keys()))
+            for ptag in projects:
+                services_index = service_indices[ptag]
                 if services_index:
-                    log.info('Project [%s]: services loaded:', ptag)
+                    log.info('[%s]: services loaded:', ptag)
                     index = []
                     for service, configs in services_index.items():
                         index.extend((service, config, version) for config, version in configs.items())
@@ -1278,7 +1354,7 @@ def show(settings, search_all_projects, host):
                     for service, config, version in index:
                         log.info('    %s/%s: %s', service, config, version)
                 else:
-                    log.info('Project [%s]: no loaded services found', ptag)
+                    log.info('[%s]: no loaded services found', ptag)
         else:
             log.info('No loaded services found')
 
@@ -1300,28 +1376,101 @@ def ls(settings, search_all_projects, host):
     """
     welcome()
 
-    log.error('Not implemented')
+    if search_all_projects:
+        project_tag = None
+        log.info('Looking for deployed versions at host [%s]...', host)
+    else:
+        codons = read_project_codons()
+        project_tag = codons.project.tag
+        log.info('Looking for deployed versions of project [%s] at host [%s]...', project_tag, host)
+
+    service_indices = execute_as_remote_task(get_services_index, host, project_tag)
+    if service_indices is None:
+        service_indices = {}
+
+    project_versions_with_services_loaded = collections.defaultdict(set)
+    for ptag, services_index in service_indices.items():
+        if services_index:
+            for service, configs in services_index.items():
+                for config, version in configs.items():
+                    project_versions_with_services_loaded[ptag].add(version)
+
+    versions_deployed = execute_as_remote_task(get_remote_versions_deployed, host, project_tag)
+
+    projects = sorted(list(versions_deployed.keys()))
+    for ptag in projects:
+        versions = versions_deployed[ptag]
+        if versions:
+            versions_sorted = sorted(list(versions))
+            log.info('[%s]: deployed versions:', ptag)
+            versions_loaded = project_versions_with_services_loaded[ptag]
+            for v in versions_sorted:
+                if v in versions_loaded:
+                    log.info('    %s - [loaded]', v)
+                else:
+                    log.info('    %s', v)
+        else:
+            log.info('[%s]: no deployed versions found', ptag)
 
     return None, None
 
 
 @cli.command(short_help='Uninstall deployed versions at remote host')
-@click.argument('versions', nargs=-1)
+@click.option('--password', prompt='[sudo] password for remote host', hide_input=True)
+@click.argument('versions')
 @click.argument('host')
 @click.pass_obj
 @process_errors
 @unwrap_or_panic
-def gc(settings, versions, host):
+def gc(settings, password, versions, host):
     """Uninstall deployed versions at remote host.
 
     \b
     Args:
-        [versions]: version masks to uninstall
+        versions: versions mask to uninstall
         host: destination host alias (usage of ssh config assumed)
     """
+    setup_global_remote_sudo_password(password)
     welcome()
 
-    log.error('Not implemented')
+    codons = read_project_codons()
+    project_tag = codons.project.tag
+    log.info('Looking for deployed and loaded versions of project [%s] at host [%s]...', project_tag, host)
+
+    service_indices = execute_as_remote_task(get_services_index, host, project_tag)
+    project_service_index = service_indices.get(project_tag, {}) if service_indices is not None else {}
+
+    versions_loaded = set()
+    for service, configs in project_service_index.items():
+        for config, version in configs.items():
+            versions_loaded.add(version)
+
+    all_versions_deployed = execute_as_remote_task(get_remote_versions_deployed, host, project_tag)
+    versions_deployed = all_versions_deployed.get(project_tag, set())
+
+    versions_pattern = versions
+    versions_matched = match_versions(versions_deployed, versions_pattern)
+    versions_matched = sorted(list(versions_matched))
+
+    log.info('Versions pattern: %s', versions)
+    log.info('Versions matched: %s', ', '.join(versions_matched))
+
+    versions_removed = []
+    versions_skipped = []
+
+    for version in versions_matched:
+        if version in versions_loaded:
+            versions_skipped.append(version)
+            log.info('Skipped: %s (currently loaded)', version)
+            continue
+        log.debug('Removing: %s', version)
+        release_name = derive_release_name(project_tag, version)
+        execute_as_remote_task(remove_release, host, project_tag, release_name)
+        versions_removed.append(version)
+        log.info('Removed: %s', version)
+
+    log.info('Versions skipped: %s', ', '.join(versions_skipped))
+    log.info('Versions removed: %s', ', '.join(versions_removed))
 
     return None, None
 
