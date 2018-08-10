@@ -304,8 +304,8 @@ def check_scm_status_for_release(scm_info):
         warnings.append('Working directory not tagged: found {} commit(s) after last tag'.format(scm_info.distance))
     if warnings:
         for w in warnings:
-            log.warn(w)
-        log.warn('Think what you\'re doing! You can press Ctrl+C to stop')
+            log.warning(w)
+        log.warning('Think what you\'re doing! You can press Ctrl+C to stop')
         TIME_TO_THINK = 7  # seconds
         time.sleep(TIME_TO_THINK)
     return None, None
@@ -368,10 +368,10 @@ def publish_release(codons, release_name, force=False):
                     if os.path.exists(path):
                         files_to_include.append(path)
                     else:
-                        log.warn('Path not exists: %s', path)
+                        log.warning('Path not exists: %s', path)
                 len_after = len(files_to_include)
                 if len_before == len_after:
-                    log.warn('No files found by pattern: %s', pattern)
+                    log.warning('No files found by pattern: %s', pattern)
         return files_to_include
 
     def copyfiles(paths, targetroot):
@@ -555,7 +555,7 @@ def upload_release(host, release_name, s3bucket, force=False):
     if not force and release_archive_exists:
         # TODO: file checksum compare
         log.info('Release [%s] already found uploaded at remote host [%s]: %s', release_name, host, remote_release_archive_path)
-        log.warn('No checksum checking was done - trusting the remote file blindly')
+        log.warning('No checksum checking was done - trusting the remote file blindly')
     else:
         with tempfile.TemporaryDirectory() as tempdir:
             local_release_archive_path = os.path.join(tempdir, release_archive_name)
@@ -622,8 +622,8 @@ def update_services_index(host, release_name, service, config, include=None):
             try:
                 service_index = yaml.load(stream)['services']
             except Exception as e:
-                log.warn('Service index corrupted: %s', e)
-                log.warn('Creating new blank service index')
+                log.warning('Service index corrupted: %s', e)
+                log.warning('Creating new blank service index')
                 service_index = {}
 
     if service not in service_index:
@@ -871,7 +871,7 @@ def remove_release(host, project_tag, release_name):
                 for command in cleanup_commands:
                     result = remote_sudo(command)
                     if result.failed:
-                        log.warn('Failed to cleanup runtime environment by: {}'.format(command))
+                        log.warning('Failed to cleanup runtime environment by: {}'.format(command))
 
     log.debug('Removing release directory...')
     result = remote_sudo('rm -rf {}'.format(remote_release_root))
@@ -1027,7 +1027,7 @@ def version_info():
         else:
             is_allowed_for_release = tag_policy(scm_info.tag)
             if not is_allowed_for_release:
-                log.warn('Tag is not allowed for release: %s', scm_info.tag)
+                log.warning('Tag is not allowed for release: %s', scm_info.tag)
     return None, None
 
 
@@ -1228,7 +1228,7 @@ def unload(settings, password, version, service, config, host):
         if service in project_service_index and config in project_service_index[service]:
             version_loaded = project_service_index[service][config]
             if version != version_loaded:
-                log.warn('Skipping unload service [%s] config [%s]: version loaded [%s] does not match requested [%s]', service, config, version_loaded, version)
+                log.warning('Skipping unload service [%s] config [%s]: version loaded [%s] does not match requested [%s]', service, config, version_loaded, version)
                 continue
         execute_as_remote_task(unload_service, host, project_tag, release_name, service, config)
         log.info('Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, release_name, host)
