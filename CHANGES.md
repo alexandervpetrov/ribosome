@@ -1,6 +1,12 @@
 
 # Ribosome release history
 
+## Next
+
+* #2: Commands [gc] and [ls] added
+* Show command output now stable - versions are sorted
+* Small improvements and refactoring
+
 
 ## 0.2.0 / 2018-07-27
 
