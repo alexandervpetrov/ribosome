@@ -642,7 +642,7 @@ def update_services_index(host, release_name, service, config, include=None):
             service_index.pop(service, None)
 
     def make_dict(obj):
-        if isinstance(obj, dict):
+        if isinstance(obj, collections.abc.Mapping):
             return {k: make_dict(v) for k, v in obj.items()}
         else:
             return obj
