@@ -3,6 +3,9 @@
 
 ## Next
 
+
+## 0.3.0 / 2018-08-10
+
 * #2: Commands [gc] and [ls] added
 * Show command output now stable - versions are sorted
 * Small improvements and refactoring
