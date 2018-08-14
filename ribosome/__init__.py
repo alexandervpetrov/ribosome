@@ -1425,6 +1425,9 @@ def ls(settings, search_all_projects, host):
         else:
             log.info('[%s]: no deployed versions found', ptag)
 
+    if not projects:
+        log.info('No deployed versions found')
+
     return None, None
 
 
@@ -1466,7 +1469,7 @@ def gc(settings, password, versions, host):
     versions_matched = sorted(list(versions_matched))
 
     log.info('Versions pattern: %s', versions)
-    log.info('Versions matched: %s', ', '.join(versions_matched))
+    log.info('Versions matched: %s', ', '.join(versions_matched) or 'none')
 
     versions_removed = []
     versions_skipped = []
@@ -1482,8 +1485,8 @@ def gc(settings, password, versions, host):
         versions_removed.append(version)
         log.info('Removed: %s', version)
 
-    log.info('Versions skipped: %s', ', '.join(versions_skipped))
-    log.info('Versions removed: %s', ', '.join(versions_removed))
+    log.info('Versions skipped: %s', ', '.join(versions_skipped) or 'none')
+    log.info('Versions removed: %s', ', '.join(versions_removed) or 'none')
 
     return None, None
 
