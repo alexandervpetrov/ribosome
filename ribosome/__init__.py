@@ -883,6 +883,14 @@ def remove_release(host, project_tag, release_name):
     if result.failed:
         return None, 'Failed to remove release directory'
 
+    release_archive_name = derive_archive_name(release_name)
+    remote_release_archive_path = RELEASES_REMOTE_ROOT.joinpath(release_archive_name)
+
+    log.debug('Removing release archive...')
+    result = remote_run('rm -rf {}'.format(remote_release_archive_path))
+    if result.failed:
+        return None, 'Failed to remove release archive'
+
     return None, None
 
 
