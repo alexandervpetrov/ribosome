@@ -12,6 +12,7 @@ click = "*"
 "boto3" = "*"
 coloredlogs = "*"
 "fabric3" = "*"
+requests = "*"
 
 [dev-packages]
 pycodestyle = "*"

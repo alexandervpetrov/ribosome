@@ -15,6 +15,7 @@ import io
 import time
 import importlib
 import collections
+import json
 
 import click
 import coloredlogs
@@ -23,6 +24,7 @@ import boto3
 import botocore
 import fabric
 import fabric.api as fapi
+import requests
 
 from ribosome import scmtools
 
@@ -66,6 +68,9 @@ project:
   tag: {project_tag}
 
 tag_policy: ribosome.default_tag_policy
+
+slack:
+  # incoming_webhook_url: https://hooks.slack.com/services/...
 
 meta:
   format: python
@@ -186,6 +191,31 @@ def load_tag_policy(tag_policy_descriptor):
     if tag_policy is None or not callable(tag_policy):
         return None, 'Invalid tag policy descriptor: {}'.format(tag_policy_descriptor)
     return tag_policy, None
+
+
+def report_to_slack(webhook_url, msg):
+    json_data = json.dumps(dict(text=msg))
+    try:
+        r = requests.post(webhook_url, data=json_data, timeout=2)
+        r.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        log.warn('Failed to report to Slack: %s', e)
+
+
+def load_hooks(codons):
+    hooks = {
+        'report': None,
+    }
+    if codons.slack:
+        webhook_url = codons.slack.get('incoming_webhook_url')
+        if webhook_url:
+            hooks['report'] = functools.partial(report_to_slack, webhook_url)
+    return as_object(hooks)
+
+
+def report(hooks, msg, *args):
+    if hooks.report:
+        hooks.report(msg % args)
 
 
 @unwrap_or_panic
@@ -938,6 +968,7 @@ def setup_logging(verbose=True):
     root.setLevel(logging.TRACE)
     root.addHandler(console_handler)
     root.addHandler(file_handler)
+    logging.getLogger('urllib3').setLevel(logging.WARN)
     logging.getLogger('botocore').setLevel(logging.WARN)
     logging.getLogger('boto3').setLevel(logging.WARN)
     logging.getLogger('s3transfer').setLevel(logging.WARN)
@@ -1076,6 +1107,7 @@ def release(settings):
     """Make release and publish artifacts"""
     welcome()
     codons = read_project_codons()
+    hooks = load_hooks(codons)
     scm_info = scm_describe()
     log.info('Got SCM info: %s', scm_info)
     version = derive_version_string(scm_info)
@@ -1106,6 +1138,7 @@ def release(settings):
         release_name = derive_release_name(codons.project.tag, version)
         publish_release(codons, release_name, force=settings.force)
         log.info('Release [%s] published', release_name)
+        report(hooks, 'Release [%s] published', release_name)
     return None, None
 
 
@@ -1125,6 +1158,7 @@ def deploy(settings, version, host):
     """
     welcome()
     codons = read_project_codons()
+    hooks = load_hooks(codons)
 
     if not codons.release or not codons.release.publish or not codons.release.publish.s3bucket:
         return None, 'Codons for Amazon S3 not found. Don\'t know how to get artifact for deploying'
@@ -1145,7 +1179,8 @@ def deploy(settings, version, host):
         execute_as_remote_task(setup_runtime_environment, host, release_name, setup_commands)
         log.info('Runtime environment at remote host configured')
 
-    log.info('Release [%s] successfully deployed at host [%s]', release_name, host)
+    log.info('Release [%s] deployed at host [%s]', release_name, host)
+    report(hooks, 'Release [%s] deployed at host [%s]', release_name, host)
     return None, None
 
 
@@ -1171,6 +1206,7 @@ def load(settings, password, version, service, config, host):
     setup_global_remote_sudo_password(password)
     welcome()
     local_codons = read_project_codons()
+    hooks = load_hooks(local_codons)
 
     project_tag = local_codons.project.tag
     release_name = derive_release_name(project_tag, version)
@@ -1193,8 +1229,10 @@ def load(settings, password, version, service, config, host):
             old_service_release_name = derive_release_name(project_tag, old_version_loaded)
             execute_as_remote_task(unload_service, host, project_tag, old_service_release_name, service, config)
             log.info('Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, old_service_release_name, host)
+            report(hooks, 'Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, old_service_release_name, host)
         execute_as_remote_task(load_service, host, project_tag, release_name, service, config)
         log.info('Service [%s] configuration [%s] from release [%s] loaded at host [%s]', service, config, release_name, host)
+        report(hooks, 'Service [%s] configuration [%s] from release [%s] loaded at host [%s]', service, config, release_name, host)
 
     return None, None
 
@@ -1221,6 +1259,7 @@ def unload(settings, password, version, service, config, host):
     setup_global_remote_sudo_password(password)
     welcome()
     local_codons = read_project_codons()
+    hooks = load_hooks(local_codons)
 
     project_tag = local_codons.project.tag
     release_name = derive_release_name(project_tag, version)
@@ -1245,6 +1284,7 @@ def unload(settings, password, version, service, config, host):
                 continue
         execute_as_remote_task(unload_service, host, project_tag, release_name, service, config)
         log.info('Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, release_name, host)
+        report(hooks, 'Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, release_name, host)
 
     return None, None
 
@@ -1267,6 +1307,7 @@ def jump(settings, password, version, host):
     setup_global_remote_sudo_password(password)
     welcome()
     local_codons = read_project_codons()
+    hooks = load_hooks(local_codons)
 
     project_tag = local_codons.project.tag
     release_name = derive_release_name(project_tag, version)
@@ -1282,8 +1323,10 @@ def jump(settings, password, version, host):
             old_service_release_name = derive_release_name(project_tag, old_version_loaded)
             execute_as_remote_task(unload_service, host, project_tag, old_service_release_name, service, config)
             log.info('Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, old_service_release_name, host)
+            report(hooks, 'Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, old_service_release_name, host)
             execute_as_remote_task(load_service, host, project_tag, release_name, service, config)
             log.info('Service [%s] configuration [%s] from release [%s] loaded at host [%s]', service, config, release_name, host)
+            report(hooks, 'Service [%s] configuration [%s] from release [%s] loaded at host [%s]', service, config, release_name, host)
 
     return None, None
 
@@ -1312,13 +1355,15 @@ def do(settings, version, service, config, action, args, host):
     """
     welcome()
     local_codons = read_project_codons()
+    hooks = load_hooks(local_codons)
 
     project_tag = local_codons.project.tag
     release_name = derive_release_name(project_tag, version)
 
     execute_as_remote_task(run_service_action, host, project_tag, release_name, service, config, action, args)
 
-    log.info('Service [%s] configuration [%s] action [%s] from release [%s] successfully completed at host [%s]', service, config, action, release_name, host)
+    log.info('Service [%s] configuration [%s] action [%s] from release [%s] completed at host [%s]', service, config, action, release_name, host)
+    report(hooks, 'Service [%s] configuration [%s] action [%s] from release [%s] completed at host [%s]', service, config, action, release_name, host)
 
     return None, None
 

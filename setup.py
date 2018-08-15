@@ -53,6 +53,7 @@ setuptools.setup(
         'coloredlogs',
         'boto3',
         'fabric3',
+        'requests',
     ],
     entry_points={
         'console_scripts': [
