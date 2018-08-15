@@ -3,6 +3,9 @@
 
 ## Next
 
+
+## 0.4.0 / 2018-08-15
+
 * New: Slack reporting support
 * Fix: Release archives now removed on garbage collect
 * Fix: Messaging to user slightly improved

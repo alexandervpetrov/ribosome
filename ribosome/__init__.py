@@ -28,7 +28,7 @@ import requests
 
 from ribosome import scmtools
 
-__version__ = '0.3.3-snapshot'
+__version__ = '0.4.0'
 
 log = logging.getLogger('ribosome')
 
