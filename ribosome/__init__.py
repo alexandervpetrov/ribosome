@@ -1362,8 +1362,8 @@ def do(settings, version, service, config, action, args, host):
 
     execute_as_remote_task(run_service_action, host, project_tag, release_name, service, config, action, args)
 
-    log.info('Service [%s] configuration [%s] action [%s] from release [%s] completed at host [%s]', service, config, action, release_name, host)
-    report(hooks, 'Service [%s] configuration [%s] action [%s] from release [%s] completed at host [%s]', service, config, action, release_name, host)
+    log.info('Action [%s] completed via service [%s] configuration [%s] from release [%s] at host [%s]', action, service, config, release_name, host)
+    report(hooks, 'Action [%s] completed via service [%s] configuration [%s] from release [%s] at host [%s]', action, service, config, release_name, host)
 
     return None, None
 
