@@ -3,6 +3,9 @@
 
 ## Next
 
+* New: JSON meta descriptor format support
+* Fix: User messaging slightly improved
+
 
 ## 0.4.0 / 2018-08-15
 
