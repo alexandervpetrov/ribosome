@@ -248,18 +248,28 @@ dirty = {dirty}
 generated = {generated}
 """
 
+
 META_SPEC = {
     'python': ('meta.py', META_PYTHON),
+    'json': ('meta.json', None),
 }
 
 
-def fmt_python(obj):
+def encode_python(obj):
     if isinstance(obj, bool) or isinstance(obj, int):
         return "{}".format(obj)
     elif isinstance(obj, dt.datetime):
         return "'{}'".format(obj.isoformat())
     else:
         return "'{}'".format(obj)
+
+
+class CustomEncoder(json.JSONEncoder):
+
+    def default(self, obj):
+        if isinstance(obj, dt.datetime):
+            return obj.isoformat()
+        return json.JSONEncoder.default(self, obj)
 
 
 @unwrap_or_panic
@@ -276,16 +286,32 @@ def write_meta(codons, version, scm_info):
         dirty=scm_info.dirty,
         generated=generated,
     )
-    metadata = {k: fmt_python(v) for k, v in metadata.items()}
-    if codons.meta.format not in META_SPEC:
-        return None, 'Unsupported meta descriptor format: {}'.format(codons.meta.format)
-    filename, template = META_SPEC[codons.meta.format]
-    try:
-        with io.open(filename, 'w', encoding='utf-8') as ostream:
-            ostream.write(template.format(**metadata))
-    except Exception as e:
-        return None, 'Failed to write {}: {}'.format(filename, e)
-    return filename, None
+    if not codons.meta.format:
+        return None, "No meta descriptor format specified"
+    filenames = []
+    formats = [token.strip() for token in codons.meta.format.split(',')]
+    for fmt in formats:
+        if fmt not in META_SPEC:
+            log.warning('Unsupported meta descriptor format: %s', fmt)
+            continue
+        filename, template = META_SPEC[fmt]
+        if fmt == 'python':
+            data = {k: encode_python(v) for k, v in metadata.items()}
+            meta_output = template.format(**data)
+        elif fmt == 'json':
+            data = dict(_comment='This file is generated. Do not edit or store under version control')
+            data.update(metadata)
+            meta_output = json.dumps(data, indent=4, cls=CustomEncoder)
+            meta_output += '\n'
+        else:
+            assert False, 'Should handle all supported formats'
+        try:
+            with io.open(filename, 'w', encoding='utf-8') as ostream:
+                ostream.write(meta_output)
+            filenames.append(filename)
+        except Exception as e:
+            return None, 'Failed to write {}: {}'.format(filename, e)
+    return filenames, None
 
 
 def job_id_generator():
@@ -1094,8 +1120,8 @@ def version_update():
     log.info('Version derived: %s', version)
     if not codons.meta:
         return None, 'No meta descriptor settings defined'
-    filename = write_meta(codons, version, scm_info)
-    log.info('Meta descriptor updated: %s', filename)
+    filenames = write_meta(codons, version, scm_info)
+    log.info('Meta descriptor(s) updated: %s', ', '.join(filenames))
     return None, None
 
 
@@ -1120,8 +1146,8 @@ def release(settings):
         return None, 'Tag is not allowed for release: {}'.format(scm_info.tag)
     check_scm_status_for_release(scm_info)
     if codons.meta:
-        filename = write_meta(codons, version, scm_info)
-        log.info('Meta descriptor updated: %s', filename)
+        filenames = write_meta(codons, version, scm_info)
+        log.info('Meta descriptor(s) updated: %s', ', '.join(filenames))
     if codons.codestyle:
         commands = codons.codestyle.get('commands', [])
         run_commands('Checking code style', commands)
