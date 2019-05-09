@@ -9,12 +9,14 @@ help:
 
 setup:  ## Make runtime environment
 	@echo "Making runtime environment..."
+	-@pipenv --rm
 	@pipenv sync --bare
 	-@pipenv check
 
 
 devsetup:  ## Make runtime environment for development
 	@echo "Making runtime environment for development..."
+	-@pipenv --rm
 	@pipenv sync --bare --dev
 	-@pipenv check
 
@@ -33,5 +35,5 @@ clean: ## Remove bytecode, cache, build and run files
 
 codestyle: ## Check code style
 	@echo "Checking code style..."
-	@pycodestyle ribosome --ignore=E501
-	@pycodestyle *.py --ignore=E501
+	@pipenv run pycodestyle ribosome --ignore=E501
+	@pipenv run pycodestyle *.py --ignore=E501
