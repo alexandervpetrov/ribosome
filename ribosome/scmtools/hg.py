@@ -3,6 +3,7 @@ import logging
 import pathlib
 
 from . import utils
+from . import errors
 
 log = logging.getLogger('scmtools.hg')
 
@@ -13,23 +14,20 @@ def detect(rootpath):
     return scmdir.exists() and scmdir.is_dir()
 
 
-def is_hg_command_available(rootpath):
-    __, error = utils.run('hg help'.split(), cwd=rootpath)
-    return error is None
+def ensure_hg_command_available(rootpath):
+    try:
+        utils.run('hg help'.split(), cwd=rootpath)
+    except errors.CommandRunError as e:
+        raise errors.ScmError('Command [hg] is not available') from e
 
 
 def describe(rootpath):
-    if not is_hg_command_available(rootpath):
-        return None, 'Command [hg] is not available'
+    ensure_hg_command_available(rootpath)
 
-    description, error = identify_repo(rootpath)
-    if error is not None:
-        return None, error
-
+    description = identify_repo(rootpath)
     branch, revision, tags, dirty = description
 
     distance = 0
-
     if tags:
         # clean tag found
         version_tag = tags[0]
@@ -38,12 +36,8 @@ def describe(rootpath):
         version_tag = None
     else:
         # general case
-        version_tag, error = find_latest_version_tag(rootpath)
-        if error is not None:
-            return None, error
-        distance, error = graph_distance(rootpath, version_tag)
-        if error is not None:
-            return None, error
+        version_tag = find_latest_version_tag(rootpath)
+        distance = graph_distance(rootpath, version_tag)
         if version_tag is not None:
             # not counting separate Mercurial commit for tag
             distance -= 1
@@ -56,34 +50,26 @@ def describe(rootpath):
         distance=distance,
         dirty=dirty,
     )
-    return scminfo, None
+    return scminfo
 
 
 def archive(rootpath, targetdir):
-    if not is_hg_command_available(rootpath):
-        return None, 'Command [hg] is not available'
-
-    log.debug('Making archive of repo [%s] to [%s]...', rootpath, targetdir)
-    __, error = utils.run(
+    ensure_hg_command_available(rootpath)
+    log.debug('Making archive of Mercurial repo [%s] to [%s]: starting...', rootpath, targetdir)
+    utils.run(
         ['hg', 'archive', targetdir],
         cwd=rootpath,
         errormsg='Failed to make repository archive',
     )
-    if error is not None:
-        return None, error
-
-    return None, None
+    log.info('Making archive of Mercurial repo [%s] to [%s]: done', rootpath, targetdir)
 
 
 def identify_repo(rootpath):
-    output, error = utils.run(
+    output = utils.run(
         'hg id --id --branch --tags'.split(),
         cwd=rootpath,
         errormsg='Failed to identify repository info',
     )
-    if error is not None:
-        return None, error
-
     revision, branch, *tags = output.split()
     # TODO: enable tag prefixes (similar to parsing inside setuptools_scm)
 
@@ -95,28 +81,26 @@ def identify_repo(rootpath):
         dirty = True
         revision = revision[:-1]
 
-    return (branch, revision, tags, dirty), None
+    return (branch, revision, tags, dirty)
 
 
 def find_latest_version_tag(rootpath):
     """Gets all tags containing a '.' from oldest to newest"""
-    output, error = utils.run(
+    output = utils.run(
         # ["hg", "log", "-r", r"ancestors(.) and tag('re:\.')", "--template", r"{tags}\n"],  # only tags with dots inside allowed
         ["hg", "log", "-r", r"ancestors(.) and tag('re:')", "--template", r"{tags}\n"],  # any tags allowed
         cwd=rootpath,
         errormsg='Failed to find latest tag',
     )
-    if error is not None:
-        return None, error
     if not output:
-        return None, None
+        return None
     tags = output.split()
     if tags[-1] == 'tip':
         tags = tags[:-1]
     if not tags:
-        return None, None
+        return None
     latest_tag = tags[-1].split()[-1]
-    return latest_tag, None
+    return latest_tag
 
 
 def graph_distance(rootpath, rev1, rev2="."):
@@ -124,15 +108,13 @@ def graph_distance(rootpath, rev1, rev2="."):
         rev1 = 'null'
     if rev2 is None:
         rev2 = 'null'
-    output, error = utils.run(
+    output = utils.run(
         ["hg", "log", "-q", "-r", "{}::{}".format(rev1, rev2)],
         cwd=rootpath,
         errormsg='Failed to find graph distance',
     )
-    if error is not None:
-        return None, error
     distance = len(output.splitlines()) - 1
-    return distance, None
+    return distance
 
 
 def changes_inside_branch_since_tag(rootpath, tag):
@@ -144,12 +126,10 @@ def changes_inside_branch_since_tag(rootpath, tag):
         r" and (merge() or file('re:^(?!\.hgtags).*$'))"
         r" and not tag({tag!r}))"  # ignore the tagged commit itself
     ).format(tag=tag)
-    output, error = utils.run(
+    output = utils.run(
         ["hg", "log", "-r", revset, "--template", r"{node|short}\n"],
         cwd=rootpath,
         errormsg='Failed to detect changes since tag',
     )
-    if error is not None:
-        return None, error
     number_of_commits = len(output.splitlines())
-    return number_of_commits, None
+    return number_of_commits

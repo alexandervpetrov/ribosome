@@ -4,6 +4,12 @@
 ## Next
 
 
+## 0.6.0 / 2019-05-10
+
+* Refactoring: Error handling based on exceptions
+* Refactoring: Code slightly reorganized
+
+
 ## 0.5.0 / 2018-08-29
 
 * New: JSON meta descriptor format support
