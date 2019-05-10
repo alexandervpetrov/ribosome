@@ -2,6 +2,8 @@
 # Ribosome release history
 
 ## Next
+* Refactoring: Error handling based on exceptions
+* Refactoring: Code slightly reorganized
 
 
 ## 0.5.0 / 2018-08-29
