@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "d08ba44e31f64b8a36f78193ac01758edca642015785d01fbfae5da7032abe0c"
+            "sha256": "d74a7ef5a3eaa4c1447f38b3778da7900c5ae5a49aac0112ed9a864e409095b1"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -16,12 +16,27 @@
         ]
     },
     "default": {
+        "aioitertools": {
+            "hashes": [
+                "sha256:e4d9d892290eccafb16c78e7a6d40e728541f6eb754a48fd74d76a6ccca6c428"
+            ],
+            "index": "pypi",
+            "version": "==0.4.0"
+        },
         "asn1crypto": {
             "hashes": [
                 "sha256:2f1adbb7546ed199e3c90ef23ec95c5cf3585bac7d11fb7eb562a3fe89c64e87",
                 "sha256:9d5c20441baf0cb60a4ac34cc447c6c189024b6b4c6cd7877034f4965c464e49"
             ],
             "version": "==0.24.0"
+        },
+        "asyncssh": {
+            "hashes": [
+                "sha256:2573a4710752d02c6dba5b82abc8010c684562467ceecf8cf3cd03e564c94e0e",
+                "sha256:b9e4612daed054725d658726dda7dfdd9f9deb711102e874d197c326bc0a2a62"
+            ],
+            "index": "pypi",
+            "version": "==1.16.1"
         },
         "bcrypt": {
             "hashes": [
