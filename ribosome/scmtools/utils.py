@@ -3,6 +3,8 @@ import logging
 import os
 import subprocess
 
+from . import errors
+
 log = logging.getLogger('scmtools.utils')
 
 # https://unix.stackexchange.com/a/270979
@@ -52,9 +54,9 @@ def run(args, cwd=None, errormsg=None, check=True):
             msg = '{}: {}'.format(errormsg, e)
         else:
             msg = 'Failed to run [{}]: {}'.format(cmd, e)
-        return None, msg
+        raise errors.CommandRunError(msg) from e
     else:
         if check and job.returncode != 0:
-            return None, 'Failed to run [{}], return code: {}'.format(cmd, job.returncode)
+            raise errors.CommandRunError('Failed to run [{}], return code: {}'.format(cmd, job.returncode))
         output = job.stdout.decode('utf-8', 'surrogateescape').strip()
-        return output, None
+        return output

@@ -26,7 +26,10 @@ import fabric
 import fabric.api as fapi
 import requests
 
-from ribosome import scmtools
+from ribosome import (
+    constants,
+    scmtools,
+)
 
 __version__ = '0.5.0-snapshot'
 
@@ -50,6 +53,26 @@ def as_object(obj):
         return obj
 
 
+class RibosomeError(Exception):
+    pass
+
+
+class CodonsError(RibosomeError):
+    pass
+
+
+class TagPolicyError(RibosomeError):
+    pass
+
+
+class JobError(RibosomeError):
+    pass
+
+
+class RemoteError(RibosomeError):
+    pass
+
+
 def unwrap_or_panic(f):
 
     @functools.wraps(f)
@@ -63,110 +86,51 @@ def unwrap_or_panic(f):
     return decorator
 
 
-CODONS_TEMPLATE = """
-project:
-  tag: {project_tag}
-
-tag_policy: ribosome.default_tag_policy
-
-slack:
-  # incoming_webhook_url: https://hooks.slack.com/services/...
-
-meta:
-  format: python
-
-codestyle:
-  commands:
-    # - make codestyle
-
-build:
-  commands:
-    # - make build
-
-test:
-  commands:
-    # - make test
-
-release:
-  include:
-    - meta.py
-  publish:
-    # s3bucket: <bucket-name>
-    # localdir: ..
-
-setup:
-  commands:
-    # - make setup
-
-cleanup:
-  # will run with sudo
-  commands:
-    # - rm -rf $(pipenv --venv)
-
-service:
-  load:
-    # will run with sudo
-    commands:
-      # - $(pipenv --py) ./service.py install {{service}} {{config}}
-      # - $(pipenv --py) ./service.py start {{service}} {{config}}
-  unload:
-    # will run with sudo
-    commands:
-      # - $(pipenv --py) ./service.py uninstall {{service}} {{config}}
-  do:
-    commands:
-      # - $(pipenv --py) ./service.py do {service} {config} {action} {args}
-
-services:
-  # <service_name>:
-  #   configs:
-  #     - <config1>
-  #     - <config2>
-"""
+def scm_describe(root='.'):
+    log.debug('Getting SCM repository info...')
+    # TODO: get outgoing changes status info
+    info = scmtools.describe(root)
+    scminfo = as_object(info)
+    log.info('Got SCM info: %s', scminfo)
+    return scminfo
 
 
-def get_clean_codons(project_tag):
-    return CODONS_TEMPLATE.format(project_tag=project_tag)
+def derive_version_string(scm_info):
+    tag = scm_info.tag
+    if not tag:
+        raise RibosomeError('SCM tag is undefined')
+    vs = tag
+    if scm_info.distance > 0:
+        vs += '.post{}'.format(scm_info.distance)
+        if scm_info.revision:
+            vs += '+{}'.format(scm_info.revision)
+    if scm_info.dirty:
+        vs += '.d{:%Y%m%d}'.format(dt.datetime.now(dt.timezone.utc))
+    log.info('Version derived: %s', vs)
+    return vs
 
 
-def get_codons():
+def read_project_codons():
     log.debug('Reading codons...')
     yaml = ryaml.YAML()
     try:
         with io.open('codons.yaml', encoding='utf-8') as istream:
             codons = yaml.load(istream)
-    except FileNotFoundError:
-        return None, 'Failed to find codons file: codons.yaml'
+    except FileNotFoundError as e:
+        raise CodonsError('Failed to find file: codons.yaml') from e
     except Exception as e:
-        return None, 'Failed to get codons: {}'.format(e)
+        raise CodonsError('Failed to read codons: {}'.format(e)) from e
     else:
-        return as_object(codons), None
-
-
-@unwrap_or_panic
-def scm_describe(root='.'):
-    log.debug('Getting SCM repository info...')
-    # TODO: get outgoing changes status info
-    info, error = scmtools.describe(root)
-    if error is not None:
-        return None, error
-    return as_object(info), None
-
-
-# Release version scheme - special case of PEP-440.
-# Forms allowed: N.N.N, N.N.NaN, N.N.NbN, N.N.NrcN
-RELEASE_TAG_PATTERN = re.compile(r'^\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?$')
-
-# Development version scheme.
-# Forms allowed: devXXXX, where `XXXX` - any non-empty alphanumerical suffix
-DEVELOPMENT_TAG_PATTERN = re.compile(r'^dev\.[a-zA-Z0-9.]+$')
+        codons = as_object(codons)
+        log.info('Found project: %s', codons.project.tag)
+        return codons
 
 
 def default_tag_policy(tag):
     if not tag:
         return False
-    is_release = re.match(RELEASE_TAG_PATTERN, tag) is not None
-    is_development = re.match(DEVELOPMENT_TAG_PATTERN, tag) is not None
+    is_release = re.match(constants.RELEASE_TAG_PATTERN, tag) is not None
+    is_development = re.match(constants.DEVELOPMENT_TAG_PATTERN, tag) is not None
     is_allowed_for_release = is_release or is_development
     return is_allowed_for_release
 
@@ -177,20 +141,21 @@ def any_tag_policy(tag):
     return True
 
 
-def load_tag_policy(tag_policy_descriptor):
+def load_tag_policy(codons):
+    tag_policy_descriptor = codons.tag_policy
     if not tag_policy_descriptor or '.' not in tag_policy_descriptor:
-        return None, 'Invalid tag policy descriptor: {}'.format(tag_policy_descriptor)
+        raise TagPolicyError('Invalid tag policy descriptor: {}'.format(tag_policy_descriptor))
     module_s, function_s = tag_policy_descriptor.rsplit('.', 1)
     if not module_s or not function_s:
-        return None, 'Invalid tag policy descriptor: {}'.format(tag_policy_descriptor)
+        raise TagPolicyError('Invalid tag policy descriptor: {}'.format(tag_policy_descriptor))
     try:
         module = importlib.import_module(module_s)
     except Exception as e:
-        return None, 'Failed to load tag policy descriptor: {}'.format(e)
+        raise TagPolicyError('Failed to load tag policy descriptor: {}'.format(e)) from e
     tag_policy = getattr(module, function_s, None)
     if tag_policy is None or not callable(tag_policy):
-        return None, 'Invalid tag policy descriptor: {}'.format(tag_policy_descriptor)
-    return tag_policy, None
+        raise TagPolicyError('Tag policy descriptor does not represent callable: {}'.format(tag_policy_descriptor))
+    return tag_policy
 
 
 def report_to_slack(webhook_url, msg):
@@ -199,7 +164,7 @@ def report_to_slack(webhook_url, msg):
         r = requests.post(webhook_url, data=json_data, timeout=2)
         r.raise_for_status()
     except requests.exceptions.RequestException as e:
-        log.warn('Failed to report to Slack: %s', e)
+        log.warning('Failed to report to Slack: %s', e)
 
 
 def load_hooks(codons):
@@ -218,43 +183,6 @@ def report(hooks, msg, *args):
         hooks.report(msg % args)
 
 
-@unwrap_or_panic
-def derive_version_string(scm_info):
-    tag = scm_info.tag
-    if not tag:
-        return None, 'SCM tag is undefined'
-    vs = tag
-    if scm_info.distance > 0:
-        vs += '.post{}'.format(scm_info.distance)
-        if scm_info.revision:
-            vs += '+{}'.format(scm_info.revision)
-    if scm_info.dirty:
-        vs += '.d{:%Y%m%d}'.format(dt.datetime.now(dt.timezone.utc))
-    return vs, None
-
-
-META_PYTHON = """
-# This file is generated. Do not edit or store under version control.
-
-project = {project}
-version = {version}
-
-revision = {revision}
-branch = {branch}
-tag = {tag}
-distance = {distance}
-dirty = {dirty}
-
-generated = {generated}
-"""
-
-
-META_SPEC = {
-    'python': ('meta.py', META_PYTHON),
-    'json': ('meta.json', None),
-}
-
-
 def encode_python(obj):
     if isinstance(obj, bool) or isinstance(obj, int):
         return "{}".format(obj)
@@ -264,7 +192,7 @@ def encode_python(obj):
         return "'{}'".format(obj)
 
 
-class CustomEncoder(json.JSONEncoder):
+class CustomJSONEncoder(json.JSONEncoder):
 
     def default(self, obj):
         if isinstance(obj, dt.datetime):
@@ -272,9 +200,8 @@ class CustomEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-@unwrap_or_panic
 def write_meta(codons, version, scm_info):
-    log.debug('Writing meta descriptor file...')
+    log.debug('Writing meta descriptor file(s)...')
     generated = dt.datetime.now(dt.timezone.utc)
     metadata = dict(
         project=codons.project.tag,
@@ -287,31 +214,29 @@ def write_meta(codons, version, scm_info):
         generated=generated,
     )
     if not codons.meta.format:
-        return None, "No meta descriptor format specified"
-    filenames = []
+        raise CodonsError("No meta descriptor format specified")
     formats = [token.strip() for token in codons.meta.format.split(',')]
     for fmt in formats:
-        if fmt not in META_SPEC:
-            log.warning('Unsupported meta descriptor format: %s', fmt)
-            continue
-        filename, template = META_SPEC[fmt]
         if fmt == 'python':
+            filename = 'meta.py'
             data = {k: encode_python(v) for k, v in metadata.items()}
-            meta_output = template.format(**data)
+            meta_output = constants.META_PYTHON.format(**data)
         elif fmt == 'json':
+            filename = 'meta.json'
             data = dict(_comment='This file is generated. Do not edit or store under version control')
             data.update(metadata)
-            meta_output = json.dumps(data, indent=4, cls=CustomEncoder)
+            meta_output = json.dumps(data, indent=4, cls=CustomJSONEncoder)
             meta_output += '\n'
         else:
-            assert False, 'Should handle all supported formats'
+            log.warning('Unsupported meta descriptor format: %s', fmt)
+            continue
         try:
             with io.open(filename, 'w', encoding='utf-8') as ostream:
                 ostream.write(meta_output)
-            filenames.append(filename)
         except Exception as e:
-            return None, 'Failed to write {}: {}'.format(filename, e)
-    return filenames, None
+            raise RibosomeError('Failed to write {}: {}'.format(filename, e)) from e
+        else:
+            log.info('Meta descriptor updated: %s', filename)
 
 
 def job_id_generator():
@@ -328,8 +253,7 @@ def next_job_id():
     return next(JOB_ID_SEQUENCE)
 
 
-@unwrap_or_panic
-def run_job(args, env=None):
+def run_job(args, env=None, errormsg=None, check=True):
     job_id = next_job_id()
     command = ' '.join(args)
     log.debug('[job #%d] run: %s', job_id, command)
@@ -349,14 +273,36 @@ def run_job(args, env=None):
             if output:
                 joblog.trace(output)
     except Exception as e:
-        return None, 'Failed to run job #{} [{}]: {}'.format(job_id, command, e)
+        log.warning('[job #%d] failed with error: %s', job_id, e)
+        if errormsg:
+            msg = '{}: {}'.format(errormsg, e)
+        else:
+            cmd = args[0]
+            msg = 'Failed to run job #{} [{}]: {}'.format(job_id, cmd, e)
+        raise JobError(msg) from e
     else:
         if job.returncode != 0:
-            log.debug('[job #%d] finished with return code %s', job_id, job.returncode)
-        return job.returncode, None
+            if check:
+                log.warning('[job #%d] finished with nonzero return code: %s', job_id, job.returncode)
+                if errormsg:
+                    msg = '{} (return code {})'.format(errormsg, job.returncode)
+                else:
+                    cmd = args[0]
+                    msg = 'Job #{} [{}] fisnihed with nonzero return code: {}'.format(job_id, cmd, job.returncode)
+                raise JobError(msg)
+            else:
+                log.debug('[job #%d] finished with nonzero return code: %s', job_id, job.returncode)
 
 
-@unwrap_or_panic
+def run_commands(job_name, commands):
+    if not commands:
+        return
+    log.debug('%s: starting...', job_name)
+    for command in commands:
+        run_job(command.split())
+    log.info('%s: done', job_name)
+
+
 def check_scm_status_for_release(scm_info):
     warnings = []
     if scm_info.dirty:
@@ -369,28 +315,6 @@ def check_scm_status_for_release(scm_info):
         log.warning('Think what you\'re doing! You can press Ctrl+C to stop')
         TIME_TO_THINK = 7  # seconds
         time.sleep(TIME_TO_THINK)
-    return None, None
-
-
-@unwrap_or_panic
-def run_commands(job_name, commands):
-    if not commands:
-        return None, None
-    log.debug('%s...', job_name)
-    for command in commands:
-        returncode = run_job(command.split())
-        if returncode != 0:
-            return None, '{} failed'.format(job_name)
-    return None, None
-
-
-@unwrap_or_panic
-def make_scm_archive(target_dir):
-    current_dir = pathlib.Path.cwd()
-    __, error = scmtools.archive(current_dir, target_dir)
-    if error is not None:
-        return None, error
-    return None, None
 
 
 def derive_release_name(project_tag, version):
@@ -417,8 +341,7 @@ def is_s3_object_exists(s3, bucket, name):
         return True
 
 
-@unwrap_or_panic
-def publish_release(codons, release_name, force=False):
+def publish_release(codons, release_name, hooks, force=False):
 
     def additional_files(codons):
         files_to_include = []
@@ -446,19 +369,15 @@ def publish_release(codons, release_name, force=False):
                 continue
             shutil.copy(localpath, targetdir)
 
-    @unwrap_or_panic
     def make_archive(srcdir, targetfilepath):
         srcdir = os.path.normpath(srcdir)
         parent, name = os.path.split(srcdir)
         args = ['tar', '--create', '--xz', '--directory', parent, '--file', targetfilepath, name]
         env = {'XZ_OPT': '-9'}
-        returncode = run_job(args, env=env)
-        if returncode != 0:
-            return None, 'Making release archive failed'
-        return None, None
+        run_job(args, env=env, errormsg='Making release archive failed')
 
     if not codons.release.publish:
-        return None, 'Codons for publishing not found. Nothing to do for release'
+        raise CodonsError('Codons for publishing not found. Nothing to do for release')
 
     project_tag = codons.project.tag
 
@@ -469,7 +388,8 @@ def publish_release(codons, release_name, force=False):
         log.debug('Making artifacts...')
         targetroot = os.path.join(tempdir, release_name)
         os.makedirs(targetroot)
-        make_scm_archive(targetroot)
+        current_dir = pathlib.Path.cwd()
+        scmtools.archive(current_dir, targetroot)
         log.debug('Copying additional include files...')
         paths = additional_files(codons)
         copyfiles(paths, targetroot)
@@ -480,19 +400,19 @@ def publish_release(codons, release_name, force=False):
             log.debug('Publishing to local directory...')
             localdir = codons.release.publish.localdir
             if not os.path.isdir(localdir):
-                return None, 'Invalid local directory for publishing: {}'.format(localdir)
+                raise CodonsError('Invalid local directory for publishing: {}'.format(localdir))
             if not force and os.path.exists(os.path.join(localdir, release_archive_name)):
-                return None, 'Release [{}] already published at local directory [{}]'.format(release_name, localdir)
+                raise RibosomeError('Release [{}] already published at local directory [{}]'.format(release_name, localdir))
             shutil.copy(release_archive_path, localdir)
         if codons.release.publish.s3bucket:
             log.debug('Publishing to Amazon S3...')
             s3bucket = codons.release.publish.s3bucket
             s3 = boto3.resource('s3')
             if not force and is_s3_object_exists(s3, s3bucket, release_s3_path):
-                return None, 'Release [{}] already published at Amazon S3 bucket [{}]'.format(release_name, s3bucket)
+                raise RibosomeError('Release [{}] already published at Amazon S3 bucket [{}]'.format(release_name, s3bucket))
             s3.Object(s3bucket, release_s3_path).upload_file(release_archive_path)
-
-    return None, None
+    log.info('Release [%s] published', release_name)
+    report(hooks, 'Release [%s] published', release_name)
 
 
 class LogStream():
@@ -530,7 +450,6 @@ class LogStream():
 
 def make_remote_operation(fabric_func, *fixed_args, logstreams=False, **fixed_kwargs):
 
-    @unwrap_or_panic
     @functools.wraps(fabric_func)
     def remote_operation(*args, **kwargs):
         host = fapi.env.host_string
@@ -548,8 +467,9 @@ def make_remote_operation(fabric_func, *fixed_args, logstreams=False, **fixed_kw
             if hasattr(result, 'return_code'):
                 if result.return_code > 1:
                     # http://tldp.org/LDP/abs/html/exitcodes.html
-                    return None, 'Host [{}] failed to run command: {}'.format(host, args[0])
-        return result, None
+                    command = args[0]
+                    raise RemoteError('Host [{}] failed to run command: {}'.format(host, command))
+        return result
 
     return remote_operation
 
@@ -564,16 +484,12 @@ def is_remote_path_exists(filepath, isdir=False, check_read_permission=False):
     check_symbol = 'd' if isdir else 'f'
     result = remote_run('test -{} {}'.format(check_symbol, filepath))
     if result.failed:
-        return False, None
+        return False
     if check_read_permission:
         result = remote_run('test -r {}'.format(filepath))
         if result.failed:
-            return False, None
-    return True, None
-
-
-RELEASES_REMOTE_ROOT = pathlib.PurePosixPath('~/releases')
-PROJECTS_REMOTE_ROOT = pathlib.PurePosixPath('~/projects')
+            return False
+    return True
 
 
 def split_release_name(release_name):
@@ -582,7 +498,6 @@ def split_release_name(release_name):
 
 
 @fapi.task
-@unwrap_or_panic
 def upload_release(host, release_name, s3bucket, force=False):
     log.debug('Starting release upload process...')
 
@@ -595,23 +510,19 @@ def upload_release(host, release_name, s3bucket, force=False):
     log.debug('Checking artifacts...')
 
     if not is_s3_object_exists(s3, s3bucket, release_s3_path):
-        return None, 'Release [{}] not found at S3 bucket [{}]'.format(release_name, s3bucket)
+        raise RibosomeError('Release [{}] not found at S3 bucket [{}]'.format(release_name, s3bucket))
 
-    @unwrap_or_panic
     def ensure_dir_exists(dirpath):
         result = remote_run('mkdir -p {}'.format(dirpath))
         if result.failed:
-            return None, 'Failed to make directories'
-        return None, None
+            raise RemoteError('Failed to make directories')
 
-    ensure_dir_exists(RELEASES_REMOTE_ROOT)
+    ensure_dir_exists(constants.RELEASES_REMOTE_ROOT)
 
     release_archive_name = derive_archive_name(release_name)
-    remote_release_archive_path = RELEASES_REMOTE_ROOT.joinpath(release_archive_name)
+    remote_release_archive_path = constants.RELEASES_REMOTE_ROOT.joinpath(release_archive_name)
 
-    release_archive_exists, error = is_remote_path_exists(remote_release_archive_path, check_read_permission=True)
-    if error is not None:
-        return None, error
+    release_archive_exists = is_remote_path_exists(remote_release_archive_path, check_read_permission=True)
 
     if not force and release_archive_exists:
         # TODO: file checksum compare
@@ -626,51 +537,44 @@ def upload_release(host, release_name, s3bucket, force=False):
             log.debug('Uploading release archive to host [%s]...', host)
             result = remote_put(local_release_archive_path, str(remote_release_archive_path))
             if result.failed:
-                return None, 'Failed to upload release archive to remote host'
+                raise RemoteError('Failed to upload release archive to remote host')
 
-    remote_project_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag)
+    remote_project_root = constants.PROJECTS_REMOTE_ROOT.joinpath(project_tag)
 
     log.debug('Extracting release archive to deploy location...')
     ensure_dir_exists(remote_project_root)
     result = remote_run('tar --extract --directory {} --file {}'.format(remote_project_root, remote_release_archive_path))
     if result.failed:
-        return None, 'Failed to extract release archive at remote host'
+        raise RemoteError('Failed to extract release archive at remote host')
 
-    return None, None
+    log.info('Release uploaded to remote host')
 
 
 @fapi.task
-@unwrap_or_panic
 def setup_runtime_environment(host, release_name, commands):
     if not commands:
-        return None, None
+        return
     log.debug('Starting runtime environment setup...')
     project_tag, version = split_release_name(release_name)
-    remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
+    remote_release_root = constants.PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
     with fapi.cd(str(remote_release_root)):
         for command in commands:
             result = remote_run(command)
             if result.failed:
-                return None, 'Failed to setup runtime environment by: {}'.format(command)
-    return None, None
-
-
-SERVICE_INDEX_NAME = 'services.index.yaml'
+                raise RemoteError('Failed to setup runtime environment by: {}'.format(command))
+    log.info('Runtime environment at remote host configured')
 
 
 @fapi.task
-@unwrap_or_panic
 def update_services_index(host, release_name, service, config, include=None):
     assert include is not None
     project_tag, version = split_release_name(release_name)
-    remote_project_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag)
-    service_index_path = remote_project_root.joinpath(SERVICE_INDEX_NAME)
+    remote_project_root = constants.PROJECTS_REMOTE_ROOT.joinpath(project_tag)
+    service_index_path = remote_project_root.joinpath(constants.SERVICE_INDEX_FILENAME)
+
+    service_index_exists = is_remote_path_exists(service_index_path, check_read_permission=True)
 
     service_index = {}
-
-    service_index_exists, error = is_remote_path_exists(service_index_path, check_read_permission=True)
-    if error is not None:
-        return None, error
 
     yaml = ryaml.YAML()
     yaml.default_flow_style = False
@@ -709,8 +613,6 @@ def update_services_index(host, release_name, service, config, include=None):
     yaml.dump(dict(services=service_index), buf)
     remote_put(buf, str(service_index_path))
 
-    return None, None
-
 
 def remote_list_subdirs(host, dirpath):
     # expand user directory [~]
@@ -723,7 +625,6 @@ def remote_list_subdirs(host, dirpath):
 
 
 @fapi.task
-@unwrap_or_panic
 def get_services_index(host, project_tag):
 
     if project_tag:
@@ -731,18 +632,16 @@ def get_services_index(host, project_tag):
         project_tags = [project_tag]
     else:
         log.debug('Fetching service indices for all projects at host [%s]...', host)
-        project_tags = remote_list_subdirs(host, PROJECTS_REMOTE_ROOT)
+        project_tags = remote_list_subdirs(host, constants.PROJECTS_REMOTE_ROOT)
 
     service_indices = {}
 
     for ptag in project_tags:
 
-        remote_project_root = PROJECTS_REMOTE_ROOT.joinpath(ptag)
-        service_index_path = remote_project_root.joinpath(SERVICE_INDEX_NAME)
+        remote_project_root = constants.PROJECTS_REMOTE_ROOT.joinpath(ptag)
+        service_index_path = remote_project_root.joinpath(constants.SERVICE_INDEX_FILENAME)
 
-        service_index_exists, error = is_remote_path_exists(service_index_path, check_read_permission=True)
-        if error is not None:
-            return None, error
+        service_index_exists = is_remote_path_exists(service_index_path, check_read_permission=True)
 
         if not service_index_exists:
             continue
@@ -756,26 +655,23 @@ def get_services_index(host, project_tag):
             try:
                 service_index = yaml.load(stream)['services']
             except Exception as e:
-                return None, 'Service index of project [{}] corrupted: {}'.format(ptag, e)
+                raise RemoteError('Service index of project [{}] corrupted: {}'.format(ptag, e))
             else:
                 service_index = dict(service_index)
                 service_indices[ptag] = service_index
 
-    return service_indices, None
+    return service_indices
 
 
 @fapi.task
-@unwrap_or_panic
 def get_remote_codons(host, project_tag, release_name):
 
-    remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
+    remote_release_root = constants.PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
     codons_path = remote_release_root.joinpath('codons.yaml')
 
-    codons_exists, error = is_remote_path_exists(codons_path, check_read_permission=True)
-    if error is not None:
-        return None, error
+    codons_exists = is_remote_path_exists(codons_path, check_read_permission=True)
     if not codons_exists:
-        return None, 'Codons not found for release [{}] at host [{}]'.format(release_name, host)
+        raise RemoteError('Codons not found for release [{}] at host [{}]'.format(release_name, host))
 
     yaml = ryaml.YAML()
 
@@ -786,13 +682,12 @@ def get_remote_codons(host, project_tag, release_name):
         try:
             codons = yaml.load(stream)
         except Exception as e:
-            return None, 'Codons corrupted for release [{}] at host [{}]: {}'.format(release_name, host, e)
-        else:
-            return as_object(codons), None
+            raise RemoteError('Codons corrupted for release [{}] at host [{}]: {}'.format(release_name, host, e)) from e
+
+    return as_object(codons)
 
 
 @fapi.task
-@unwrap_or_panic
 def get_remote_versions_deployed(host, project_tag):
 
     if project_tag:
@@ -800,12 +695,12 @@ def get_remote_versions_deployed(host, project_tag):
         project_tags = [project_tag]
     else:
         log.debug('Fetching deployed versions list for all projects at host [%s]...', host)
-        project_tags = remote_list_subdirs(host, PROJECTS_REMOTE_ROOT)
+        project_tags = remote_list_subdirs(host, constants.PROJECTS_REMOTE_ROOT)
 
     versions_deployed = collections.defaultdict(set)
 
     for ptag in project_tags:
-        remote_project_root = PROJECTS_REMOTE_ROOT.joinpath(ptag)
+        remote_project_root = constants.PROJECTS_REMOTE_ROOT.joinpath(ptag)
         subdirs = remote_list_subdirs(host, remote_project_root)
         release_prefix = ptag + '-'
         for name in subdirs:
@@ -813,64 +708,62 @@ def get_remote_versions_deployed(host, project_tag):
                 version = name[len(release_prefix):]
                 versions_deployed[ptag].add(version)
 
-    return versions_deployed, None
+    return versions_deployed
 
 
 @fapi.task
-@unwrap_or_panic
 def run_service_commands(host, project_tag, release_name, commands, sudo=False):
     if not commands:
-        return None, None
+        return
     runner = remote_sudo if sudo else remote_run
-    remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
+    remote_release_root = constants.PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
     with fapi.cd(str(remote_release_root)):
         for command in commands:
             result = runner(command)
             if result.failed:
-                return None, 'Failed to run service command: {}'.format(command)
-    return None, None
+                raise RemoteError('Failed to run service command: {}'.format(command))
 
 
 @fapi.task
-@unwrap_or_panic
-def load_service(host, project_tag, release_name, service, config):
-    log.debug('Loading service...')
+def load_service(host, project_tag, release_name, service, config, hooks):
+    log.debug('Loading service [%s] configuration [%s] from release [%s] at host [%s]: starting...', service, config, release_name, host)
     codons = get_remote_codons(host, project_tag, release_name)
     if not codons.service or not codons.service.load:
-        return None, 'Service [load] commands not found'
+        raise CodonsError('Service [load] commands not found')
     load_commands = codons.service.load.get('commands', [])
     load_commands = [cmd.format(service=service, config=config) for cmd in load_commands]
     run_service_commands(host, project_tag, release_name, load_commands, sudo=True)
     update_services_index(host, release_name, service, config, include=True)
-    return None, None
+    log.info('Loading service [%s] configuration [%s] from release [%s] at host [%s]: done', service, config, release_name, host)
+    report(hooks, 'Service [%s] configuration [%s] from release [%s] loaded at host [%s]', service, config, release_name, host)
 
 
 @fapi.task
-@unwrap_or_panic
-def unload_service(host, project_tag, release_name, service, config):
-    log.debug('Unloading service...')
+def unload_service(host, project_tag, release_name, service, config, hooks):
+    log.debug('Unloading service [%s] configuration [%s] from release [%s] at host [%s]: starting...', service, config, release_name, host)
     codons = get_remote_codons(host, project_tag, release_name)
     if not codons.service or not codons.service.unload:
-        return None, 'Service [unload] commands not found'
+        raise CodonsError('Service [unload] commands not found')
     unload_commands = codons.service.unload.get('commands', [])
     unload_commands = [cmd.format(service=service, config=config) for cmd in unload_commands]
     run_service_commands(host, project_tag, release_name, unload_commands, sudo=True)
     update_services_index(host, release_name, service, config, include=False)
-    return None, None
+    log.info('Unloading service [%s] configuration [%s] from release [%s] at host [%s]: done', service, config, release_name, host)
+    report(hooks, 'Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, release_name, host)
 
 
 @fapi.task
-@unwrap_or_panic
-def run_service_action(host, project_tag, release_name, service, config, action, args):
-    log.debug('Running service action...')
+def run_service_action(host, project_tag, release_name, service, config, action, args, hooks):
+    log.debug('Running action [%s] via service [%s] configuration [%s] from release [%s] at host [%s]: starting...', action, service, config, release_name, host)
     codons = get_remote_codons(host, project_tag, release_name)
     if not codons.service or not codons.service.do:
-        return None, 'Service [do] commands not found'
+        raise CodonsError('Service [do] commands not found')
     do_commands = codons.service.do.get('commands', [])
     args_str = ' '.join(args)
     do_commands = [cmd.format(service=service, config=config, action=action, args=args_str) for cmd in do_commands]
     run_service_commands(host, project_tag, release_name, do_commands)
-    return None, None
+    log.info('Running action [%s] via service [%s] configuration [%s] from release [%s] at host [%s]: done', action, service, config, release_name, host)
+    report(hooks, 'Action [%s] completed via service [%s] configuration [%s] from release [%s] at host [%s]', action, service, config, release_name, host)
 
 
 def find_service_configs(codons, services_pattern, configs_pattern):
@@ -917,12 +810,11 @@ def match_versions(versions, versions_pattern):
 
 
 @fapi.task
-@unwrap_or_panic
 def remove_release(host, project_tag, release_name):
     log.debug('Removing release [%s]...', release_name)
     codons = get_remote_codons(host, project_tag, release_name)
 
-    remote_release_root = PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
+    remote_release_root = constants.PROJECTS_REMOTE_ROOT.joinpath(project_tag).joinpath(release_name)
 
     if codons.cleanup:
         cleanup_commands = codons.cleanup.get('commands', [])
@@ -937,17 +829,15 @@ def remove_release(host, project_tag, release_name):
     log.debug('Removing release directory...')
     result = remote_sudo('rm -rf {}'.format(remote_release_root))
     if result.failed:
-        return None, 'Failed to remove release directory'
+        raise RemoteError('Failed to remove release directory')
 
     release_archive_name = derive_archive_name(release_name)
-    remote_release_archive_path = RELEASES_REMOTE_ROOT.joinpath(release_archive_name)
+    remote_release_archive_path = constants.RELEASES_REMOTE_ROOT.joinpath(release_archive_name)
 
     log.debug('Removing release archive...')
     result = remote_run('rm -rf {}'.format(remote_release_archive_path))
     if result.failed:
-        return None, 'Failed to remove release archive'
-
-    return None, None
+        raise RemoteError('Failed to remove release archive')
 
 
 def execute_as_remote_task(operation, host, *args, **kwargs):
@@ -1005,29 +895,24 @@ def welcome():
     log.info('Ribosome {}. Let\'s make a bit of proteins...'.format(__version__))
 
 
-@unwrap_or_panic
-def read_project_codons():
-    codons, error = get_codons()
-    if error is not None:
-        return None, error
-    log.info('Found project: %s', codons.project.tag)
-    return codons, None
-
-
 def process_errors(f):
 
     @functools.wraps(f)
-    def decorated(*args, **kwds):
+    def decorated(*args, **kwargs):
+        verbose = True
+        ctx = click.get_current_context(silent=True)
+        if ctx is not None:
+            ctx = ctx.find_root()
+            verbose = ctx.params.get('verbose', True)
         try:
-            return f(*args, **kwds)
+            return f(*args, **kwargs)
+        except (scmtools.errors.ScmError, scmtools.errors.CommandRunError) as e:
+            log.error(e, exc_info=verbose)
+        except RibosomeError as e:
+            log.error(e, exc_info=verbose)
         except Exception as e:
-            verbose = True
-            ctx = click.get_current_context(silent=True)
-            if ctx is not None:
-                ctx = ctx.find_root()
-                verbose = ctx.params.get('verbose', True)
             log.fatal(e, exc_info=verbose)
-            sys.exit(1)
+        sys.exit(1)
 
     return decorated
 
@@ -1045,6 +930,7 @@ CLICK_CONTEXT_SETTINGS = dict(
 def cli(ctx, verbose, force):
     """Yet another project deploy and release tool"""
     settings = {
+        'verbose': verbose,
         'force': force,
     }
     ctx.obj = as_object(settings)
@@ -1054,19 +940,18 @@ def cli(ctx, verbose, force):
 @cli.command(short_help='Initialize Ribosome project')
 @click.pass_obj
 @process_errors
-@unwrap_or_panic
 def init(settings):
     """Initialize current directory with codons.yaml"""
     welcome()
     current_dir = pathlib.Path.cwd()
     codons_path = current_dir.joinpath('codons.yaml')
     if codons_path.exists():
-        return None, 'Current directory already contains codons.yaml'
+        raise RibosomeError('Current directory already contains: codons.yaml')
     project_tag = current_dir.name
-    codons_yaml = get_clean_codons(project_tag)
+    codons_yaml = constants.CODONS_TEMPLATE.format(project_tag=project_tag)
     with io.open(codons_path, 'w', encoding='utf-8') as ostream:
         ostream.write(codons_yaml)
-    return None, None
+    log.info('Clean codons initialized: codons.yaml')
 
 
 @cli.group()
@@ -1077,95 +962,67 @@ def version():
 
 @version.command('info')
 @process_errors
-@unwrap_or_panic
 def version_info():
     """Show project version information"""
     welcome()
-    codons_loaded = False
-    codons, error = get_codons()
-    if error is None:
-        codons_loaded = True
-        log.info('Found project: %s', codons.project.tag)
     scm_info = scm_describe()
-    log.info('Got SCM info: %s', scm_info)
     version = derive_version_string(scm_info)
-    log.info('Version derived: %s', version)
-    if codons_loaded:
-        tag_policy, error = load_tag_policy(codons.tag_policy)
-        if error is not None:
-            log.error(error)
-        else:
-            is_allowed_for_release = tag_policy(scm_info.tag)
-            if not is_allowed_for_release:
-                log.warning('Tag is not allowed for release: %s', scm_info.tag)
-    return None, None
+    try:
+        codons = read_project_codons()
+        tag_policy = load_tag_policy(codons)
+        is_allowed_for_release = tag_policy(scm_info.tag)
+        if not is_allowed_for_release:
+            log.warning('Tag is not allowed for release: %s', scm_info.tag)
+    except CodonsError:
+        pass
 
 
 @version.command('update')
 @process_errors
-@unwrap_or_panic
 def version_update():
     """Update project meta descriptor with current version"""
     welcome()
-    codons = read_project_codons()
     scm_info = scm_describe()
-    log.info('Got SCM info: %s', scm_info)
-    tag_policy, error = load_tag_policy(codons.tag_policy)
-    if error is not None:
-        return None, error
+    version = derive_version_string(scm_info)
+    codons = read_project_codons()
+    tag_policy = load_tag_policy(codons)
     is_allowed_for_release = tag_policy(scm_info.tag)
     if not is_allowed_for_release:
-        return None, 'Tag is not allowed for release: {}'.format(scm_info.tag)
-    version = derive_version_string(scm_info)
-    log.info('Version derived: %s', version)
+        log.warning('Tag is not allowed for release: %s', scm_info.tag)
     if not codons.meta:
-        return None, 'No meta descriptor settings defined'
-    filenames = write_meta(codons, version, scm_info)
-    log.info('Meta descriptor(s) updated: %s', ', '.join(filenames))
-    return None, None
+        raise CodonsError('No meta descriptor settings defined')
+    write_meta(codons, version, scm_info)
 
 
 @cli.command()
 @click.pass_obj
 @process_errors
-@unwrap_or_panic
 def release(settings):
     """Make release and publish artifacts"""
     welcome()
+    scm_info = scm_describe()
+    version = derive_version_string(scm_info)
     codons = read_project_codons()
     hooks = load_hooks(codons)
-    scm_info = scm_describe()
-    log.info('Got SCM info: %s', scm_info)
-    version = derive_version_string(scm_info)
-    log.info('Version derived: %s', version)
-    tag_policy, error = load_tag_policy(codons.tag_policy)
-    if error is not None:
-        return None, error
+    tag_policy = load_tag_policy(codons)
     is_allowed_for_release = tag_policy(scm_info.tag)
     if not is_allowed_for_release:
-        return None, 'Tag is not allowed for release: {}'.format(scm_info.tag)
+        raise RibosomeError('Tag is not allowed for release: {}'.format(scm_info.tag))
     check_scm_status_for_release(scm_info)
     if codons.meta:
-        filenames = write_meta(codons, version, scm_info)
-        log.info('Meta descriptor(s) updated: %s', ', '.join(filenames))
+        write_meta(codons, version, scm_info)
     if codons.codestyle:
         commands = codons.codestyle.get('commands', [])
-        run_commands('Checking code style', commands)
-        log.info('Code style checked')
+        run_commands('Code style check', commands)
     if codons.build:
         commands = codons.build.get('commands', [])
         run_commands('Building project', commands)
-        log.info('Project built')
     if codons.test:
         commands = codons.test.get('commands', [])
         run_commands('Running tests', commands)
-        log.info('Tests completed')
     if codons.release:
         release_name = derive_release_name(codons.project.tag, version)
-        publish_release(codons, release_name, force=settings.force)
-        log.info('Release [%s] published', release_name)
-        report(hooks, 'Release [%s] published', release_name)
-    return None, None
+        publish_release(codons, release_name, hooks, force=settings.force)
 
 
 @cli.command(short_help='Deploy release artifacts to host')
@@ -1173,7 +1030,6 @@ def release(settings):
 @click.argument('host')
 @click.pass_obj
 @process_errors
-@unwrap_or_panic
 def deploy(settings, version, host):
     """Deploy release artifacts to host and prepare for run.
 
@@ -1187,13 +1043,12 @@ def deploy(settings, version, host):
     hooks = load_hooks(codons)
 
     if not codons.release or not codons.release.publish or not codons.release.publish.s3bucket:
-        return None, 'Codons for Amazon S3 not found. Don\'t know how to get artifact for deploying'
+        raise CodonsError('Codons for Amazon S3 not found. Don\'t know how to get artifact for deploying')
 
     release_name = derive_release_name(codons.project.tag, version)
     s3bucket = codons.release.publish.s3bucket
 
     execute_as_remote_task(upload_release, host, release_name, s3bucket, force=settings.force)
-    log.info('Release uploaded to remote host')
 
     # pip install --user pipenv
     # .profile
@@ -1203,11 +1058,9 @@ def deploy(settings, version, host):
     if remote_codons.setup:
         setup_commands = remote_codons.setup.get('commands', [])
         execute_as_remote_task(setup_runtime_environment, host, release_name, setup_commands)
-        log.info('Runtime environment at remote host configured')
 
     log.info('Release [%s] deployed at host [%s]', release_name, host)
     report(hooks, 'Release [%s] deployed at host [%s]', release_name, host)
-    return None, None
 
 
 @cli.command(short_help='Load service at remote host')
@@ -1218,7 +1071,6 @@ def deploy(settings, version, host):
 @click.argument('host')
 @click.pass_obj
 @process_errors
-@unwrap_or_panic
 def load(settings, password, version, service, config, host):
     """Install and run service with chosen configuration.
 
@@ -1242,11 +1094,10 @@ def load(settings, password, version, service, config, host):
 
     codons = execute_as_remote_task(get_remote_codons, host, project_tag, release_name)
     matches = find_service_configs(codons, service, config)
+    log.debug('Service configs matched: %s', matches)
     if not matches:
         log.info('No matched service configs found: nothing to do')
-        return None, None
-
-    log.debug('Service configs matched: %s', matches)
+        return
 
     for service, config in matches:
         log.debug('Processing service [%s] configuration [%s]...', service, config)
@@ -1254,13 +1105,7 @@ def load(settings, password, version, service, config, host):
             old_version_loaded = project_service_index[service][config]
             old_service_release_name = derive_release_name(project_tag, old_version_loaded)
             execute_as_remote_task(unload_service, host, project_tag, old_service_release_name, service, config)
-            log.info('Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, old_service_release_name, host)
-            report(hooks, 'Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, old_service_release_name, host)
         execute_as_remote_task(load_service, host, project_tag, release_name, service, config)
-        log.info('Service [%s] configuration [%s] from release [%s] loaded at host [%s]', service, config, release_name, host)
-        report(hooks, 'Service [%s] configuration [%s] from release [%s] loaded at host [%s]', service, config, release_name, host)
-
-    return None, None
 
 
 @cli.command(short_help='Unload service at remote host')
@@ -1271,7 +1116,6 @@ def load(settings, password, version, service, config, host):
 @click.argument('host')
 @click.pass_obj
 @process_errors
-@unwrap_or_panic
 def unload(settings, password, version, service, config, host):
     """Stop and uninstall service with chosen configuration.
 
@@ -1295,11 +1139,10 @@ def unload(settings, password, version, service, config, host):
 
     codons = execute_as_remote_task(get_remote_codons, host, project_tag, release_name)
     matches = find_service_configs(codons, service, config)
+    log.debug('Service configs matched: %s', matches)
     if not matches:
         log.info('No matched service configs found: nothing to do')
         return None, None
-
-    log.debug('Service configs matched: %s', matches)
 
     for service, config in matches:
         log.debug('Processing service [%s] configuration [%s]...', service, config)
@@ -1309,10 +1152,6 @@ def unload(settings, password, version, service, config, host):
                 log.warning('Skipping unload service [%s] config [%s]: version loaded [%s] does not match requested [%s]', service, config, version_loaded, version)
                 continue
         execute_as_remote_task(unload_service, host, project_tag, release_name, service, config)
-        log.info('Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, release_name, host)
-        report(hooks, 'Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, release_name, host)
-
-    return None, None
 
 
 @cli.command(short_help='Reload all services to version at remote host')
@@ -1321,7 +1160,6 @@ def unload(settings, password, version, service, config, host):
 @click.argument('host')
 @click.pass_obj
 @process_errors
-@unwrap_or_panic
 def jump(settings, password, version, host):
     """Reload all already loaded services to specific project version at remote host.
 
@@ -1343,18 +1181,13 @@ def jump(settings, password, version, host):
 
     if not project_service_index:
         log.info('No loaded services found at host [%s]. Nothing to do', host)
+        return
 
     for service, loaded_info in project_service_index.items():
         for config, old_version_loaded in loaded_info.items():
             old_service_release_name = derive_release_name(project_tag, old_version_loaded)
             execute_as_remote_task(unload_service, host, project_tag, old_service_release_name, service, config)
-            log.info('Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, old_service_release_name, host)
-            report(hooks, 'Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, old_service_release_name, host)
-            execute_as_remote_task(load_service, host, project_tag, release_name, service, config)
-            log.info('Service [%s] configuration [%s] from release [%s] loaded at host [%s]', service, config, release_name, host)
-            report(hooks, 'Service [%s] configuration [%s] from release [%s] loaded at host [%s]', service, config, release_name, host)
-
-    return None, None
+            execute_as_remote_task(load_service, host, project_tag, release_name, service, config, hooks)
 
 
 @cli.command(short_help='Run command for service at remote host')
@@ -1366,7 +1199,6 @@ def jump(settings, password, version, host):
 @click.argument('host')
 @click.pass_obj
 @process_errors
-@unwrap_or_panic
 def do(settings, version, service, config, action, args, host):
     """Run action for service with chosen configuration.
 
@@ -1386,12 +1218,7 @@ def do(settings, version, service, config, action, args, host):
     project_tag = local_codons.project.tag
     release_name = derive_release_name(project_tag, version)
 
-    execute_as_remote_task(run_service_action, host, project_tag, release_name, service, config, action, args)
-
-    log.info('Action [%s] completed via service [%s] configuration [%s] from release [%s] at host [%s]', action, service, config, release_name, host)
-    report(hooks, 'Action [%s] completed via service [%s] configuration [%s] from release [%s] at host [%s]', action, service, config, release_name, host)
-
-    return None, None
+    execute_as_remote_task(run_service_action, host, project_tag, release_name, service, config, action, args, hooks)
 
 
 @cli.command(short_help='Show loaded services at remote host')
@@ -1399,7 +1226,6 @@ def do(settings, version, service, config, action, args, host):
 @click.argument('host')
 @click.pass_obj
 @process_errors
-@unwrap_or_panic
 def show(settings, search_all_projects, host):
     """Show loaded services at remote host.
 
@@ -1442,15 +1268,12 @@ def show(settings, search_all_projects, host):
         else:
             log.info('No loaded services found')
 
-    return None, None
-
 
 @cli.command(short_help='List deployed versions at remote host')
 @click.option('-a', '--all', 'search_all_projects', is_flag=True, help='Search through all projects')
 @click.argument('host')
 @click.pass_obj
 @process_errors
-@unwrap_or_panic
 def ls(settings, search_all_projects, host):
     """List deployed versions at remote host.
 
@@ -1499,8 +1322,6 @@ def ls(settings, search_all_projects, host):
     if not projects:
         log.info('No deployed versions found')
 
-    return None, None
-
 
 @cli.command(short_help='Uninstall deployed versions at remote host')
 @click.option('--password', prompt='[sudo] password for remote host', hide_input=True)
@@ -1508,7 +1329,6 @@ def ls(settings, search_all_projects, host):
 @click.argument('host')
 @click.pass_obj
 @process_errors
-@unwrap_or_panic
 def gc(settings, password, versions, host):
     """Uninstall deployed versions at remote host.
 
@@ -1558,8 +1378,6 @@ def gc(settings, password, versions, host):
 
     log.info('Versions skipped: %s', ', '.join(versions_skipped) or 'none')
     log.info('Versions removed: %s', ', '.join(versions_removed) or 'none')
-
-    return None, None
 
 
 fabric_global_patch()
