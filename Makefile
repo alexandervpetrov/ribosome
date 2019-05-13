@@ -21,7 +21,7 @@ devsetup:  ## Make runtime environment for development
 	-@pipenv check
 
 
-clean: ## Remove bytecode, cache, build and run files
+clean:  ## Remove bytecode, cache, build and run files
 	@echo "Removing bytecode, cache, build and run files..."
 	@rm -rf `find . -name __pycache__`
 	@rm -f `find . -type f -name '*.py[co]' `
@@ -33,7 +33,7 @@ clean: ## Remove bytecode, cache, build and run files
 	@rm -rf *.log
 
 
-codestyle: ## Check code style
+codestyle:  ## Check code style
 	@echo "Checking code style..."
 	@pipenv run pycodestyle ribosome --ignore=E501
 	@pipenv run pycodestyle *.py --ignore=E501
