@@ -3,6 +3,9 @@
 
 ## Next
 
+
+## 0.6.1 / 2019-05-14
+
 * Fix: Unload service functionality was broken
 
 
