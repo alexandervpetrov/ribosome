@@ -1104,7 +1104,7 @@ def load(settings, password, version, service, config, host):
         if service in project_service_index and config in project_service_index[service]:
             old_version_loaded = project_service_index[service][config]
             old_service_release_name = derive_release_name(project_tag, old_version_loaded)
-            execute_as_remote_task(unload_service, host, project_tag, old_service_release_name, service, config)
+            execute_as_remote_task(unload_service, host, project_tag, old_service_release_name, service, config, hooks)
         execute_as_remote_task(load_service, host, project_tag, release_name, service, config)
 
 
@@ -1151,7 +1151,7 @@ def unload(settings, password, version, service, config, host):
             if version != version_loaded:
                 log.warning('Skipping unload service [%s] config [%s]: version loaded [%s] does not match requested [%s]', service, config, version_loaded, version)
                 continue
-        execute_as_remote_task(unload_service, host, project_tag, release_name, service, config)
+        execute_as_remote_task(unload_service, host, project_tag, release_name, service, config, hooks)
 
 
 @cli.command(short_help='Reload all services to version at remote host')
@@ -1186,7 +1186,7 @@ def jump(settings, password, version, host):
     for service, loaded_info in project_service_index.items():
         for config, old_version_loaded in loaded_info.items():
             old_service_release_name = derive_release_name(project_tag, old_version_loaded)
-            execute_as_remote_task(unload_service, host, project_tag, old_service_release_name, service, config)
+            execute_as_remote_task(unload_service, host, project_tag, old_service_release_name, service, config, hooks)
             execute_as_remote_task(load_service, host, project_tag, release_name, service, config, hooks)
 
 
