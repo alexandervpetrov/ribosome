@@ -884,11 +884,13 @@ def setup_logging(verbose=True):
     root.setLevel(logging.TRACE)
     root.addHandler(console_handler)
     root.addHandler(file_handler)
-    logging.getLogger('urllib3').setLevel(logging.WARN)
-    logging.getLogger('botocore').setLevel(logging.WARN)
-    logging.getLogger('boto3').setLevel(logging.WARN)
-    logging.getLogger('s3transfer').setLevel(logging.WARN)
-    logging.getLogger('paramiko').setLevel(logging.WARN)
+    logging.captureWarnings(True)
+    logging.getLogger('py.warnings').setLevel(logging.ERROR)
+    logging.getLogger('urllib3').setLevel(logging.WARNING)
+    logging.getLogger('botocore').setLevel(logging.WARNING)
+    logging.getLogger('boto3').setLevel(logging.WARNING)
+    logging.getLogger('s3transfer').setLevel(logging.WARNING)
+    logging.getLogger('paramiko').setLevel(logging.WARNING)
 
 
 def welcome():
