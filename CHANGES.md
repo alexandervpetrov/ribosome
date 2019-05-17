@@ -3,6 +3,9 @@
 
 ## Next
 
+
+## 0.6.2 / 2019-05-17
+
 * Fix: Deprecation warnings from third-party libs suppressed
 
 
