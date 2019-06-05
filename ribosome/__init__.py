@@ -875,9 +875,10 @@ def setup_logging(verbose=True):
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(console_level)
     console_handler.setFormatter(console_formatter)
-    file_format = '%(asctime)s.%(msecs)03d [%(name)-20s] %(levelname)-8s %(message)s'
-    file_formatter = logging.Formatter(file_format)
-    file_handler = logging.FileHandler('ribosome.log', 'w', encoding='utf-8')
+    file_format = '%(asctime)s.%(msecs)d [%(name)-20s] %(levelname)-8s %(message)s'
+    iso8601fmt = '%Y-%m-%dT%H:%M:%S'
+    file_formatter = logging.Formatter(fmt=file_format, datefmt=iso8601fmt)
+    file_handler = logging.FileHandler('ribosome.log', mode='a', encoding='utf-8')
     file_handler.setLevel(logging.TRACE)
     file_handler.setFormatter(file_formatter)
     root = logging.getLogger()
