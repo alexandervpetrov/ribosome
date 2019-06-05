@@ -1108,7 +1108,7 @@ def load(settings, password, version, service, config, host):
             old_version_loaded = project_service_index[service][config]
             old_service_release_name = derive_release_name(project_tag, old_version_loaded)
             execute_as_remote_task(unload_service, host, project_tag, old_service_release_name, service, config, hooks)
-        execute_as_remote_task(load_service, host, project_tag, release_name, service, config)
+        execute_as_remote_task(load_service, host, project_tag, release_name, service, config, hooks)
 
 
 @cli.command(short_help='Unload service at remote host')
