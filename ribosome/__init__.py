@@ -726,7 +726,7 @@ def run_service_commands(host, project_tag, release_name, commands, sudo=False):
 
 @fapi.task
 def load_service(host, project_tag, release_name, service, config, hooks):
-    log.debug('Loading service [%s] configuration [%s] from release [%s] at host [%s]: starting...', service, config, release_name, host)
+    log.debug('Service [%s] configuration [%s] from release [%s] at host [%s] load: starting...', service, config, release_name, host)
     codons = get_remote_codons(host, project_tag, release_name)
     if not codons.service or not codons.service.load:
         raise CodonsError('Service [load] commands not found')
@@ -734,13 +734,13 @@ def load_service(host, project_tag, release_name, service, config, hooks):
     load_commands = [cmd.format(service=service, config=config) for cmd in load_commands]
     run_service_commands(host, project_tag, release_name, load_commands, sudo=True)
     update_services_index(host, release_name, service, config, include=True)
-    log.info('Loading service [%s] configuration [%s] from release [%s] at host [%s]: done', service, config, release_name, host)
-    report(hooks, 'Service [%s] configuration [%s] from release [%s] loaded at host [%s]', service, config, release_name, host)
+    log.info('Service [%s] configuration [%s] from release [%s] at host [%s] load: done', service, config, release_name, host)
+    report(hooks, 'Service [%s] configuration [%s] from release [%s] at host [%s]: loaded', service, config, release_name, host)
 
 
 @fapi.task
 def unload_service(host, project_tag, release_name, service, config, hooks):
-    log.debug('Unloading service [%s] configuration [%s] from release [%s] at host [%s]: starting...', service, config, release_name, host)
+    log.debug('Service [%s] configuration [%s] from release [%s] at host [%s] unload: starting...', service, config, release_name, host)
     codons = get_remote_codons(host, project_tag, release_name)
     if not codons.service or not codons.service.unload:
         raise CodonsError('Service [unload] commands not found')
@@ -748,13 +748,13 @@ def unload_service(host, project_tag, release_name, service, config, hooks):
     unload_commands = [cmd.format(service=service, config=config) for cmd in unload_commands]
     run_service_commands(host, project_tag, release_name, unload_commands, sudo=True)
     update_services_index(host, release_name, service, config, include=False)
-    log.info('Unloading service [%s] configuration [%s] from release [%s] at host [%s]: done', service, config, release_name, host)
-    report(hooks, 'Service [%s] configuration [%s] from release [%s] unloaded at host [%s]', service, config, release_name, host)
+    log.info('Service [%s] configuration [%s] from release [%s] at host [%s] unload: done', service, config, release_name, host)
+    report(hooks, 'Service [%s] configuration [%s] from release [%s] at host [%s]: unloaded', service, config, release_name, host)
 
 
 @fapi.task
 def run_service_action(host, project_tag, release_name, service, config, action, args, hooks):
-    log.debug('Running action [%s] via service [%s] configuration [%s] from release [%s] at host [%s]: starting...', action, service, config, release_name, host)
+    log.debug('Action [%s] via service [%s] configuration [%s] from release [%s] at host [%s]: starting...', action, service, config, release_name, host)
     codons = get_remote_codons(host, project_tag, release_name)
     if not codons.service or not codons.service.do:
         raise CodonsError('Service [do] commands not found')
@@ -762,8 +762,8 @@ def run_service_action(host, project_tag, release_name, service, config, action,
     args_str = ' '.join(args)
     do_commands = [cmd.format(service=service, config=config, action=action, args=args_str) for cmd in do_commands]
     run_service_commands(host, project_tag, release_name, do_commands)
-    log.info('Running action [%s] via service [%s] configuration [%s] from release [%s] at host [%s]: done', action, service, config, release_name, host)
-    report(hooks, 'Action [%s] completed via service [%s] configuration [%s] from release [%s] at host [%s]', action, service, config, release_name, host)
+    log.info('Action [%s] via service [%s] configuration [%s] from release [%s] at host [%s]: done', action, service, config, release_name, host)
+    report(hooks, 'Action [%s] via service [%s] configuration [%s] from release [%s] at host [%s]: completed', action, service, config, release_name, host)
 
 
 def find_service_configs(codons, services_pattern, configs_pattern):
