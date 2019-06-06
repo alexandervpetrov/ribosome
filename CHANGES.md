@@ -8,7 +8,7 @@
 ## 0.6.3 / 2019-06-06
 
 * Fix: Load service functionality was broken
-* Fix: Logging timestampts made ISO 8601
+* Fix: Logging timestamps made ISO 8601
 * Fix: Small changes in messaging and reporting
 
 
