@@ -16,3 +16,5 @@ requests = "*"
 
 [dev-packages]
 pycodestyle = "*"
+rope = "*"
+twine = "*"
