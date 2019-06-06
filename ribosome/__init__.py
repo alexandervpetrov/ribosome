@@ -31,7 +31,7 @@ from ribosome import (
     scmtools,
 )
 
-__version__ = '0.6.2-snapshot'
+__version__ = '0.6.3'
 
 log = logging.getLogger('ribosome')
 
