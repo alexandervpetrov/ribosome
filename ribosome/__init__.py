@@ -860,9 +860,9 @@ def logging_global_patch():
     logging.TRACE = logging.DEBUG - 1
     logging.addLevelName(logging.TRACE, 'TRACE')
 
-    def log_trace(self, message, *args, **kws):
+    def log_trace(self, message, *args, **kwargs):
         if self.isEnabledFor(logging.TRACE):
-            self._log(logging.TRACE, message, args, **kws)
+            self._log(logging.TRACE, message, args, **kwargs)
 
     logging.Logger.trace = log_trace
     coloredlogs.DEFAULT_LEVEL_STYLES['trace'] = dict(color='blue')
