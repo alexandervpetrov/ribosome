@@ -73,19 +73,6 @@ class RemoteError(RibosomeError):
     pass
 
 
-def unwrap_or_panic(f):
-
-    @functools.wraps(f)
-    def decorator(*args, **kwargs):
-        result, error = f(*args, **kwargs)
-        if error is not None:
-            log.error(error)
-            sys.exit(1)
-        return result
-
-    return decorator
-
-
 def scm_describe(root='.'):
     log.debug('Getting SCM repository info...')
     # TODO: get outgoing changes status info
