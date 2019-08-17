@@ -16,7 +16,7 @@ def detect(rootpath):
 
 def ensure_hg_command_available(rootpath):
     try:
-        utils.run('hg help'.split(), cwd=rootpath)
+        utils.run('hg --version'.split(), cwd=rootpath)
     except errors.CommandRunError as e:
         raise errors.ScmError('Command [hg] is not available') from e
 

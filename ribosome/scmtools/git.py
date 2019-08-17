@@ -17,7 +17,7 @@ def detect(rootpath):
 
 def ensure_git_command_available(rootpath):
     try:
-        utils.run('git help'.split(), cwd=rootpath)
+        utils.run('git --version'.split(), cwd=rootpath)
     except errors.CommandRunError as e:
         raise errors.ScmError('Command [git] is not available') from e
 
