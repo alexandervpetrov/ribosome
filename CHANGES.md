@@ -3,6 +3,7 @@
 
 ## Next
 
+* Fix: Logging timestamps made fixed length millisecond precision
 
 
 ## 0.6.3 / 2019-06-06
