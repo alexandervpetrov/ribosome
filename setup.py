@@ -11,15 +11,15 @@ THIS_FILE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 def get_readme():
     readme_path = os.path.join(THIS_FILE_DIR, 'README.md')
-    with io.open(readme_path, 'rt', encoding='utf8') as f:
-        readme = f.read()
+    with io.open(readme_path, 'rt', encoding='utf8') as istream:
+        readme = istream.read()
     return readme
 
 
 def get_version_string():
     module_with_version_def_path = os.path.join(THIS_FILE_DIR, 'ribosome', '__init__.py')
-    with io.open(module_with_version_def_path, 'rt', encoding='utf8') as f:
-        module_source_code = f.read()
+    with io.open(module_with_version_def_path, 'rt', encoding='utf8') as istream:
+        module_source_code = istream.read()
     version = re.search(r'__version__ = \'(.*?)\'', module_source_code).group(1)
     return version
 

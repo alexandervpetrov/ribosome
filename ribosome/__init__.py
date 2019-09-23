@@ -47,10 +47,9 @@ def as_object(obj):
 
     if isinstance(obj, collections.abc.Mapping):
         return DictProxy({k: as_object(v) for k, v in obj.items()})
-    elif isinstance(obj, collections.abc.Sequence) and not isinstance(obj, (str, bytes, bytearray)):
+    if isinstance(obj, collections.abc.Sequence) and not isinstance(obj, (str, bytes, bytearray)):
         return [as_object(item) for item in obj]
-    else:
-        return obj
+    return obj
 
 
 class RibosomeError(Exception):
@@ -171,12 +170,11 @@ def report(hooks, msg, *args):
 
 
 def encode_python(obj):
-    if isinstance(obj, bool) or isinstance(obj, int):
+    if isinstance(obj, (bool, int)):
         return "{}".format(obj)
-    elif isinstance(obj, dt.datetime):
+    if isinstance(obj, dt.datetime):
         return "'{}'".format(obj.isoformat())
-    else:
-        return "'{}'".format(obj)
+    return "'{}'".format(obj)
 
 
 class CustomJSONEncoder(json.JSONEncoder):
@@ -591,8 +589,7 @@ def update_services_index(host, release_name, service, config, include=None):
     def make_dict(obj):
         if isinstance(obj, collections.abc.Mapping):
             return {k: make_dict(v) for k, v in obj.items()}
-        else:
-            return obj
+        return obj
 
     service_index = make_dict(service_index)
 
@@ -1132,7 +1129,7 @@ def unload(settings, password, version, service, config, host):
     log.debug('Service configs matched: %s', matches)
     if not matches:
         log.info('No matched service configs found: nothing to do')
-        return None, None
+        return
 
     for service, config in matches:
         log.debug('Processing service [%s] configuration [%s]...', service, config)
