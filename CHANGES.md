@@ -3,6 +3,7 @@
 
 ## Next
 
+* Fix: #9 Deploy command checks for loaded services
 * Fix: Logging timestamps made fixed length millisecond precision
 
 

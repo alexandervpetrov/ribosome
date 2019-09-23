@@ -528,7 +528,7 @@ def upload_release(host, release_name, s3bucket, force=False):
 
     log.debug('Extracting release archive to deploy location...')
     ensure_dir_exists(remote_project_root)
-    result = remote_run('tar --extract --directory {} --file {}'.format(remote_project_root, remote_release_archive_path))
+    result = remote_run('tar --extract --overwrite --directory {} --file {}'.format(remote_project_root, remote_release_archive_path))
     if result.failed:
         raise RemoteError('Failed to extract release archive at remote host')
 
@@ -1026,21 +1026,38 @@ def deploy(settings, version, host):
         host: destination host alias (usage of ssh config assumed)
     """
     welcome()
-    codons = read_project_codons()
-    hooks = load_hooks(codons)
+    local_codons = read_project_codons()
+    hooks = load_hooks(local_codons)
 
-    if not codons.release or not codons.release.publish or not codons.release.publish.s3bucket:
+    project_tag = local_codons.project.tag
+    release_name = derive_release_name(project_tag, version)
+
+    s3bucket = None
+    if local_codons.release:
+        if local_codons.release.publish:
+            s3bucket = local_codons.release.publish.s3bucket
+
+    if not s3bucket:
         raise CodonsError('Codons for Amazon S3 not found. Don\'t know how to get artifact for deploying')
 
-    release_name = derive_release_name(codons.project.tag, version)
-    s3bucket = codons.release.publish.s3bucket
+    service_indices = execute_as_remote_task(get_services_index, host, project_tag)
+    project_service_index = service_indices.get(project_tag, {}) if service_indices is not None else {}
+
+    versions_loaded = []
+    for configs in project_service_index.values():
+        versions_loaded.extend(v for v in configs.values())
+    versions_loaded = set(versions_loaded)
+
+    if version in versions_loaded:
+        log.info('Cannot safely deploy. Version [%s] is currently loaded at host [%s]', version, host)
+        return
 
     execute_as_remote_task(upload_release, host, release_name, s3bucket, force=settings.force)
 
     # pip install --user pipenv
     # .profile
 
-    remote_codons = execute_as_remote_task(get_remote_codons, host, codons.project.tag, release_name)
+    remote_codons = execute_as_remote_task(get_remote_codons, host, project_tag, release_name)
 
     if remote_codons.setup:
         setup_commands = remote_codons.setup.get('commands', [])
