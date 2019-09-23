@@ -42,3 +42,15 @@ codestyle:  ## Check code style
 	@echo "Checking code style..."
 	@pipenv run pycodestyle ribosome --ignore=E501
 	@pipenv run pycodestyle *.py --ignore=E501
+
+
+dist: clean  ## Generate Python distribution archive
+	@pipenv run python setup.py sdist bdist_wheel
+
+
+upload.test:  ## Upload distribution archive to [test.pypi.org]
+	@pipenv run twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+
+
+upload.pypi:  ## Upload distribution archive to [pypi.org]
+	@pipenv run twine upload dist/*
