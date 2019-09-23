@@ -3,6 +3,9 @@
 
 ## Next
 
+
+## 0.6.4 / 2019-09-23
+
 * Fix: #9 Deploy command checks for loaded services
 * Fix: Logging timestamps made fixed length millisecond precision
 
