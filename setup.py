@@ -6,19 +6,22 @@ import re
 import setuptools
 
 
-HERE = os.path.abspath(os.path.dirname(__file__))
+THIS_FILE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 
 def get_readme():
-    with io.open(os.path.join(HERE, 'README.md'), 'rt', encoding='utf8') as f:
+    readme_path = os.path.join(THIS_FILE_DIR, 'README.md')
+    with io.open(readme_path, 'rt', encoding='utf8') as f:
         readme = f.read()
-        return readme
+    return readme
 
 
 def get_version_string():
-    with io.open(os.path.join(HERE, 'ribosome', '__init__.py'), 'rt', encoding='utf8') as f:
-        version = re.search(r'__version__ = \'(.*?)\'', f.read()).group(1)
-        return version
+    module_with_version_def_path = os.path.join(THIS_FILE_DIR, 'ribosome', '__init__.py')
+    with io.open(module_with_version_def_path, 'rt', encoding='utf8') as f:
+        module_source_code = f.read()
+    version = re.search(r'__version__ = \'(.*?)\'', module_source_code).group(1)
+    return version
 
 
 setuptools.setup(
