@@ -7,6 +7,11 @@ help:
 	@grep -E '^[a-zA-Z_.-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 
+gitsetup:  ## Configure config for fresh clone of git repository
+	git config branch.master.mergeoptions "--no-ff"
+	git config branch.develop.mergeoptions "--no-ff"
+
+
 setup:  ## Make runtime environment
 	@echo "Making runtime environment..."
 	-@pipenv --rm
