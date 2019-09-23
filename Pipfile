@@ -16,6 +16,7 @@ requests = "*"
 
 [dev-packages]
 pycodestyle = "*"
+pylint = "*"
 rope = "*"
 twine = "*"
 ribosome-tool = {editable = true,path = "."}
