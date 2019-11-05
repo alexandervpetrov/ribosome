@@ -1068,7 +1068,7 @@ def deploy(settings, version, host):
 
 
 @cli.command(short_help='Load service at remote host')
-@click.option('--password', prompt='[sudo] password for remote host', hide_input=True)
+@click.option('--password', prompt='Enter sudo password for remote host', hide_input=True, default='')
 @click.argument('version')
 @click.argument('service', type=str)
 @click.argument('config', type=str)
@@ -1113,7 +1113,7 @@ def load(settings, password, version, service, config, host):
 
 
 @cli.command(short_help='Unload service at remote host')
-@click.option('--password', prompt='[sudo] password for remote host', hide_input=True)
+@click.option('--password', prompt='Enter sudo password for remote host', hide_input=True, default='')
 @click.argument('version')
 @click.argument('service')
 @click.argument('config')
@@ -1159,7 +1159,7 @@ def unload(settings, password, version, service, config, host):
 
 
 @cli.command(short_help='Reload all services to version at remote host')
-@click.option('--password', prompt='[sudo] password for remote host', hide_input=True)
+@click.option('--password', prompt='Enter sudo password for remote host', hide_input=True, default='')
 @click.argument('version')
 @click.argument('host')
 @click.pass_obj
@@ -1328,7 +1328,7 @@ def ls(settings, search_all_projects, host):
 
 
 @cli.command(short_help='Uninstall deployed versions at remote host')
-@click.option('--password', prompt='[sudo] password for remote host', hide_input=True)
+@click.option('--password', prompt='Enter sudo password for remote host', hide_input=True, default='')
 @click.argument('versions')
 @click.argument('host')
 @click.pass_obj

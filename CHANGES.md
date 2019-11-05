@@ -3,6 +3,8 @@
 
 ## Next
 
+* Fix: Allow empty sudo password be entered by default
+
 
 ## 0.6.4 / 2019-09-23
 
