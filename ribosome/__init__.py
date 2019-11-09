@@ -391,8 +391,16 @@ def publish_release(codons, release_name, hooks, force=False):
             shutil.copy(release_archive_path, localdir)
         if codons.release.publish.s3bucket:
             log.debug('Publishing to Amazon S3...')
+            aws_profile = codons.release.publish.aws_profile
             s3bucket = codons.release.publish.s3bucket
-            s3 = boto3.resource('s3')
+
+            if aws_profile is not None:
+                aws_session = boto3.Session(profile_name=aws_profile)
+            else:
+                aws_session = boto3.Session()
+
+            s3 = aws_session.resource('s3')
+
             if not force and is_s3_object_exists(s3, s3bucket, release_s3_path):
                 raise RibosomeError('Release [{}] already published at Amazon S3 bucket [{}]'.format(release_name, s3bucket))
             s3.Object(s3bucket, release_s3_path).upload_file(release_archive_path)
@@ -483,14 +491,19 @@ def split_release_name(release_name):
 
 
 @fapi.task
-def upload_release(host, release_name, s3bucket, force=False):
+def upload_release(host, release_name, aws_profile, s3bucket, force=False):
     log.debug('Starting release upload process...')
 
     release_archive_name = derive_archive_name(release_name)
     project_tag, version = split_release_name(release_name)
     release_s3_path = derive_s3_path(project_tag, release_name)
 
-    s3 = boto3.resource('s3')
+    if aws_profile is not None:
+        aws_session = boto3.Session(profile_name=aws_profile)
+    else:
+        aws_session = boto3.Session()
+
+    s3 = aws_session.resource('s3')
 
     log.debug('Checking artifacts...')
 
@@ -1032,10 +1045,12 @@ def deploy(settings, version, host):
     project_tag = local_codons.project.tag
     release_name = derive_release_name(project_tag, version)
 
+    aws_profile = None
     s3bucket = None
     if local_codons.release:
         if local_codons.release.publish:
             s3bucket = local_codons.release.publish.s3bucket
+            aws_profile = local_codons.release.publish.aws_profile
 
     if not s3bucket:
         raise CodonsError('Codons for Amazon S3 not found. Don\'t know how to get artifact for deploying')
@@ -1052,7 +1067,7 @@ def deploy(settings, version, host):
         log.info('Cannot safely deploy. Version [%s] is currently loaded at host [%s]', version, host)
         return
 
-    execute_as_remote_task(upload_release, host, release_name, s3bucket, force=settings.force)
+    execute_as_remote_task(upload_release, host, release_name, aws_profile, s3bucket, force=settings.force)
 
     # pip install --user pipenv
     # .profile
