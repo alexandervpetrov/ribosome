@@ -3,6 +3,9 @@
 
 ## Next
 
+
+## 0.6.6 / 2019-11-09
+
 * New: #11 Support AWS credentials profiles
 
 
