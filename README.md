@@ -86,8 +86,11 @@ After you tagged repository with a version, you can make a release:
 
 During this process release archive is made and uploaded to Amazon S3 bucket.
 Credentials for S3 access expected to be
-[already configured](https://boto3.readthedocs.io/en/latest/guide/quickstart.html#configuration)
+[already configured](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/quickstart.html#configuration)
 in the environment.
+Please, consider to use
+[shared credentials file](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html#shared-credentials-file)
+and specify AWS profile in `codons.yaml`.
 
 Any uploaded to S3 release can be deployed to remote host accessible via SSH:
 

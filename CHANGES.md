@@ -3,10 +3,12 @@
 
 ## Next
 
+* New: #11 Support AWS credentials profiles
+
 
 ## 0.6.5 / 2019-11-05
 
-* Fix: Allow empty sudo password be entered by default
+* Fix: Allow empty sudo password to be entered by default
 
 
 ## 0.6.4 / 2019-09-23
