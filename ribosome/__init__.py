@@ -865,16 +865,26 @@ def logging_global_patch():
     coloredlogs.DEFAULT_LEVEL_STYLES['trace'] = dict(color='blue')
 
 
+class ColoredFormatter(coloredlogs.ColoredFormatter):
+
+    def formatTime(self, record, datefmt=None):
+        return logging.Formatter.formatTime(self, record, datefmt)
+
+
 def setup_logging(verbose=True):
+    iso8601fmt = '%Y-%m-%dT%H:%M:%S'
+    logging.Formatter.converter = time.gmtime  # use UTC timezone in logs
+    logging.Formatter.default_time_format = iso8601fmt
+    logging.Formatter.default_msec_format = '%s.%03d'
+
     console_level = logging.TRACE if verbose else logging.INFO
     console_format = '[%(name)-20s] %(levelname)-8s %(message)s'
-    console_formatter = coloredlogs.ColoredFormatter(console_format)
+    console_formatter = ColoredFormatter(fmt=console_format)
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(console_level)
     console_handler.setFormatter(console_formatter)
-    file_format = '%(asctime)s.%(msecs)03d [%(name)-20s] %(levelname)-8s %(message)s'
-    iso8601fmt = '%Y-%m-%dT%H:%M:%S'
-    file_formatter = logging.Formatter(fmt=file_format, datefmt=iso8601fmt)
+    file_format = '%(asctime)s [%(name)-20s] %(levelname)-8s %(message)s'
+    file_formatter = logging.Formatter(fmt=file_format)
     file_handler = logging.FileHandler('ribosome.log', mode='a', encoding='utf-8')
     file_handler.setLevel(logging.TRACE)
     file_handler.setFormatter(file_formatter)
